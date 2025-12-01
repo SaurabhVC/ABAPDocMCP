@@ -3,4 +3,4 @@ mcp-abap-adt/
 
 # MCP config (contains credentials)
 .mcp.json
-./claude/
+./claude/abap-adt-api-lib/
