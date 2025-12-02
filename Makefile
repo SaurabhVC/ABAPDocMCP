@@ -26,9 +26,13 @@ BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILD_DATE)"
 
 # Platforms for cross-compilation
-PLATFORMS=linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
+PLATFORMS_LINUX=linux/amd64 linux/arm64 linux/386 linux/arm
+PLATFORMS_DARWIN=darwin/amd64 darwin/arm64
+PLATFORMS_WINDOWS=windows/amd64 windows/arm64 windows/386
+PLATFORMS=$(PLATFORMS_LINUX) $(PLATFORMS_DARWIN) $(PLATFORMS_WINDOWS)
 
 .PHONY: all build clean test lint fmt deps tidy help install run
+.PHONY: build-all build-linux build-darwin build-windows
 
 all: deps lint test build
 
@@ -37,14 +41,44 @@ all: deps lint test build
 build: ## Build the binary for current platform
 	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
 
-build-all: ## Build for all platforms
+build-all: ## Build for all platforms (linux, darwin, windows - amd64, arm64, 386, arm)
+	@mkdir -p $(BUILD_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
 		arch=$${platform#*/}; \
 		output=$(BUILD_DIR)/$(BINARY_NAME)-$$os-$$arch; \
 		if [ "$$os" = "windows" ]; then output=$$output.exe; fi; \
 		echo "Building $$output..."; \
-		GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $$output $(CMD_DIR); \
+		GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $$output $(CMD_DIR) || exit 1; \
+	done
+	@echo "Build complete. Binaries in $(BUILD_DIR)/"
+	@ls -lh $(BUILD_DIR)/
+
+build-linux: ## Build for Linux (amd64, arm64, 386, arm)
+	@mkdir -p $(BUILD_DIR)
+	@for platform in $(PLATFORMS_LINUX); do \
+		arch=$${platform#*/}; \
+		output=$(BUILD_DIR)/$(BINARY_NAME)-linux-$$arch; \
+		echo "Building $$output..."; \
+		GOOS=linux GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $$output $(CMD_DIR) || exit 1; \
+	done
+
+build-darwin: ## Build for macOS (amd64, arm64)
+	@mkdir -p $(BUILD_DIR)
+	@for platform in $(PLATFORMS_DARWIN); do \
+		arch=$${platform#*/}; \
+		output=$(BUILD_DIR)/$(BINARY_NAME)-darwin-$$arch; \
+		echo "Building $$output..."; \
+		GOOS=darwin GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $$output $(CMD_DIR) || exit 1; \
+	done
+
+build-windows: ## Build for Windows (amd64, arm64, 386)
+	@mkdir -p $(BUILD_DIR)
+	@for platform in $(PLATFORMS_WINDOWS); do \
+		arch=$${platform#*/}; \
+		output=$(BUILD_DIR)/$(BINARY_NAME)-windows-$$arch.exe; \
+		echo "Building $$output..."; \
+		GOOS=windows GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $$output $(CMD_DIR) || exit 1; \
 	done
 
 install: ## Install the binary

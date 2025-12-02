@@ -2,25 +2,89 @@
 
 A Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT).
 
-This provides a single-binary distribution of ABAP ADT tools for use with Claude and other MCP-compatible LLMs.
+Single-binary distribution of 36 ADT tools for use with Claude and other MCP-compatible AI assistants.
 
-## Features
+## Why This Project?
 
-- **Single Binary**: Zero runtime dependencies, trivial distribution
-- **36 ADT Tools**: Complete ABAP development lifecycle support
-- **Read Operations**: Retrieve source code for programs, classes, functions, tables
-- **CRUD Operations**: Create, update, and delete ABAP objects
-- **Development Tools**: Syntax check, activation, unit test execution
-- **Code Intelligence**: Find definition, find references, code completion, pretty printer
-- **Workflow Tools**: High-level operations that combine multiple steps
-- **Cross-Platform**: Builds for Linux, macOS, Windows (amd64, arm64)
+This project brings **AI-assisted ABAP development** to Claude Code and Claude Desktop by exposing SAP ADT capabilities through the Model Context Protocol. With this MCP server, Claude can:
 
-## Available Tools
+- Read and understand your ABAP codebase
+- Create, modify, and delete ABAP objects
+- Run syntax checks and unit tests
+- Navigate code with find definition/references
+- Format code with pretty printer
+- Execute SQL queries against SAP tables
 
-### Read Operations (13 tools)
+## Inspirations & Credits
+
+This project stands on the shoulders of giants:
+
+| Project | Author | Description |
+|---------|--------|-------------|
+| [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | Marcello Urbani | TypeScript library that implements the ADT REST API. Powers the [ABAP Remote FS](https://github.com/marcellourbani/vscode_abap_remote_fs) VS Code extension. The definitive reference for ADT API implementation. |
+| [mcp-abap-adt](https://github.com/mario-andrle/mcp-abap-adt) | Mario Andrle | First MCP server for ABAP ADT in TypeScript/Node.js. Pioneered the concept of AI-assisted ABAP development via MCP. |
+
+**mcp-abap-adt-go** is a complete rewrite in Go, providing:
+- Single binary with zero runtime dependencies
+- Extended toolset (36 vs 13 tools)
+- Full CRUD operations and code intelligence
+- ~50x faster startup time
+
+## Capability Matrix
+
+Comparison of ADT capabilities across implementations:
+
+| Capability | ADT (Eclipse) | abap-adt-api (TS) | mcp-abap-adt (TS) | **mcp-abap-adt-go** |
+|------------|:-------------:|:-----------------:|:-----------------:|:-------------------:|
+| **Source Read** |
+| Programs, Classes, Interfaces | Y | Y | Y | **Y** |
+| Functions, Function Groups | Y | Y | Y | **Y** |
+| Tables, Structures | Y | Y | Y | **Y** |
+| Includes | Y | Y | Y | **Y** |
+| Package Contents | Y | Y | Y | **Y** |
+| Type Info | Y | Y | P | **Y** |
+| CDS Views | Y | Y | N | N |
+| RAP/BDEF | Y | Y | N | N |
+| **Data Query** |
+| Table Contents | Y | Y | P | **Y** |
+| SQL Filtering | Y | Y | N | **Y** |
+| Freestyle SQL | Y | Y | N | **Y** |
+| **Development Tools** |
+| Syntax Check | Y | Y | N | **Y** |
+| Activation | Y | Y | N | **Y** |
+| Unit Tests | Y | Y | N | **Y** |
+| **CRUD Operations** |
+| Lock/Unlock | Y | Y | N | **Y** |
+| Create Objects | Y | Y | N | **Y** |
+| Update Source | Y | Y | N | **Y** |
+| Delete Objects | Y | Y | N | **Y** |
+| Class Includes | Y | Y | N | **Y** |
+| **Code Intelligence** |
+| Find Definition | Y | Y | N | **Y** |
+| Find References | Y | Y | N | **Y** |
+| Code Completion | Y | Y | N | **Y** |
+| Type Hierarchy | Y | Y | N | **Y** |
+| Pretty Printer | Y | Y | N | **Y** |
+| **Workflow Tools** |
+| Write & Activate | - | - | N | **Y** |
+| Create & Activate | - | - | N | **Y** |
+| Create with Tests | - | - | N | **Y** |
+| **Transports** |
+| Transport Management | Y | Y | N | N |
+| **ATC** |
+| Code Quality Checks | Y | Y | N | N |
+| **Debugging** |
+| Remote Debugging | Y | Y | N | N |
+
+**Legend:** Y = Full support, P = Partial, N = Not implemented, - = Not applicable
+
+## Available Tools (36)
+
+### Read Operations (14 tools)
 
 | Tool | Description |
 |------|-------------|
+| `SearchObject` | Search for ABAP objects |
 | `GetProgram` | Retrieve ABAP program source code |
 | `GetClass` | Retrieve ABAP class source code |
 | `GetInterface` | Retrieve ABAP interface source code |
@@ -33,7 +97,6 @@ This provides a single-binary distribution of ABAP ADT tools for use with Claude
 | `GetPackage` | Retrieve package contents |
 | `GetTransaction` | Retrieve transaction details |
 | `GetTypeInfo` | Retrieve data type information |
-| `SearchObject` | Search for ABAP objects |
 | `RunQuery` | Execute freestyle SQL query |
 
 ### Development Tools (3 tools)
@@ -85,23 +148,27 @@ This provides a single-binary distribution of ABAP ADT tools for use with Claude
 
 ## Installation
 
+### Pre-built Binaries
+
+Download from the [releases page](https://github.com/oisee/vibing-steamer/releases).
+
+Available for:
+- Linux (amd64, arm64, 386, arm)
+- macOS (amd64, arm64/Apple Silicon)
+- Windows (amd64, arm64, 386)
+
 ### From Source
 
 ```bash
-# Clone the repository
-git clone https://github.com/vibingsteamer/mcp-abap-adt-go.git
-cd mcp-abap-adt-go
+git clone https://github.com/oisee/vibing-steamer.git
+cd vibing-steamer
 
-# Build
-go build -o mcp-abap-adt-go ./cmd/mcp-abap-adt-go
-
-# Or with make
+# Build for current platform
 make build
+
+# Build for all platforms
+make build-all
 ```
-
-### Pre-built Binaries
-
-Download from the [releases page](https://github.com/vibingsteamer/mcp-abap-adt-go/releases).
 
 ## Configuration
 
@@ -165,10 +232,19 @@ Add `.mcp.json` to your project root:
 go test ./...
 
 # Run integration tests (requires SAP system)
-SAP_URL=http://host:port SAP_USER=user SAP_PASSWORD=pass go test -tags=integration -v ./pkg/adt/
+SAP_URL=http://host:port SAP_USER=user SAP_PASSWORD=pass \
+  go test -tags=integration -v ./pkg/adt/
 
-# Build
-go build -o mcp-abap-adt-go ./cmd/mcp-abap-adt-go
+# Build for current platform
+make build
+
+# Build for all platforms
+make build-all
+
+# Build for specific OS
+make build-linux
+make build-darwin
+make build-windows
 ```
 
 ## Architecture
@@ -194,22 +270,35 @@ mcp-abap-adt-go/
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
 
-## Comparison with TypeScript MCP
+## Comparison Summary
 
 | Aspect | mcp-abap-adt (TS) | mcp-abap-adt-go |
 |--------|-------------------|-----------------|
-| Tools | 13 | 36 |
-| SQL Query | No | Yes |
-| Syntax Check | No | Yes |
-| Unit Tests | No | Yes |
-| Activation | No | Yes |
-| CRUD | No | Yes |
-| Class Includes | No | Yes |
-| Code Intelligence | No | Yes |
-| Workflow Tools | No | Yes |
-| Distribution | npm + Node.js | Single binary |
-| Startup | ~500ms | ~10ms |
+| **Tools** | 13 | **36** |
+| **Language** | TypeScript | Go |
+| **Runtime** | Node.js required | Single binary |
+| **Distribution** | npm install | Download & run |
+| **Startup Time** | ~500ms | **~10ms** |
+| **SQL Queries** | No | **Yes** |
+| **Syntax Check** | No | **Yes** |
+| **Unit Tests** | No | **Yes** |
+| **Activation** | No | **Yes** |
+| **CRUD Operations** | No | **Yes** |
+| **Class Includes** | No | **Yes** |
+| **Code Intelligence** | No | **Yes** |
+| **Workflow Tools** | No | **Yes** |
+
+## Roadmap
+
+- [ ] Transport Management
+- [ ] ATC (Code Quality) Integration
+- [ ] CDS View Support
+- [ ] RAP/BDEF Support
 
 ## License
 
 MIT
+
+## Contributing
+
+Contributions are welcome! Please see [ARCHITECTURE.md](ARCHITECTURE.md) and [CLAUDE.md](CLAUDE.md) for development guidelines.
