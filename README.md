@@ -1,3 +1,6 @@
+
+![Vibing ABAP Developer](./media/vibing-steamer.png)
+
 # mcp-abap-adt-go
 
 A Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT).
