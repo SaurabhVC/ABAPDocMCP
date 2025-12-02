@@ -42,6 +42,8 @@ type Config struct {
 	Cookies map[string]string
 	// Verbose enables verbose logging
 	Verbose bool
+	// Safety defines protection parameters to prevent unintended modifications
+	Safety SafetyConfig
 }
 
 // Option is a functional option for configuring the ADT client.
@@ -96,6 +98,34 @@ func WithVerbose() Option {
 	}
 }
 
+// WithSafety sets the safety configuration.
+func WithSafety(safety SafetyConfig) Option {
+	return func(c *Config) {
+		c.Safety = safety
+	}
+}
+
+// WithReadOnly enables read-only mode (blocks all write operations).
+func WithReadOnly() Option {
+	return func(c *Config) {
+		c.Safety.ReadOnly = true
+	}
+}
+
+// WithBlockFreeSQL blocks execution of arbitrary SQL queries.
+func WithBlockFreeSQL() Option {
+	return func(c *Config) {
+		c.Safety.BlockFreeSQL = true
+	}
+}
+
+// WithAllowedPackages restricts operations to specific packages.
+func WithAllowedPackages(packages ...string) Option {
+	return func(c *Config) {
+		c.Safety.AllowedPackages = packages
+	}
+}
+
 // HasBasicAuth returns true if username and password are configured.
 func (c *Config) HasBasicAuth() bool {
 	return c.Username != "" && c.Password != ""
@@ -117,6 +147,7 @@ func NewConfig(baseURL, username, password string, opts ...Option) *Config {
 		Language:    "EN",
 		SessionType: SessionStateful,
 		Timeout:     30 * time.Second,
+		Safety:      UnrestrictedSafetyConfig(), // Default: no restrictions for backwards compatibility
 	}
 
 	for _, opt := range opts {

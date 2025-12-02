@@ -1,0 +1,208 @@
+package adt
+
+import (
+	"fmt"
+	"strings"
+)
+
+// SafetyConfig defines protection parameters to prevent unintended system modifications
+type SafetyConfig struct {
+	// ReadOnly blocks all write operations (create, update, delete, activate)
+	// When true, only read operations are allowed
+	ReadOnly bool
+
+	// BlockFreeSQL prevents execution of arbitrary SQL queries via RunQuery
+	// Recommended for production to prevent accidental data access
+	BlockFreeSQL bool
+
+	// AllowedOps is a whitelist of operation types (if non-empty, only these are allowed)
+	// Operation types:
+	//   R - Read operations (GetClass, GetProgram, etc.)
+	//   S - Search operations (SearchObject)
+	//   Q - Query operations (GetTable, GetTableContents with predefined queries)
+	//   F - Free SQL queries (RunQuery)
+	//   C - Create operations (CreateObject, CreateTestInclude)
+	//   U - Update operations (UpdateSource, UpdateClassInclude)
+	//   D - Delete operations (DeleteObject)
+	//   A - Activation operations (Activate)
+	//   T - Test operations (RunUnitTests)
+	//   L - Lock/Unlock operations
+	//   I - Code intelligence (FindDefinition, CodeCompletion, etc.)
+	//   W - Workflow operations (WriteClass, WriteProgram, CreateClassWithTests)
+	// Example: "RSQ" = only reads, searches, and queries allowed
+	AllowedOps string
+
+	// DisallowedOps is a blacklist of operation types (takes precedence over AllowedOps)
+	// Example: "CDUA" = block create, delete, update, activate
+	DisallowedOps string
+
+	// AllowedPackages restricts operations to specific packages (empty = all packages allowed)
+	// Example: []string{"$TMP", "ZTEST", "Z*"} - only allow local and test packages
+	// Supports wildcards: "Z*" matches all packages starting with Z
+	AllowedPackages []string
+
+	// DryRun mode - log operations but don't execute them (useful for testing)
+	DryRun bool
+}
+
+// DefaultSafetyConfig returns a safe default configuration (read-only, no free SQL)
+func DefaultSafetyConfig() SafetyConfig {
+	return SafetyConfig{
+		ReadOnly:     true,
+		BlockFreeSQL: true,
+		AllowedOps:   "RSQTI", // Read, Search, Query, Test, Intelligence only
+	}
+}
+
+// UnrestrictedSafetyConfig returns a configuration with no restrictions
+// WARNING: Use with caution - allows all operations including destructive ones
+func UnrestrictedSafetyConfig() SafetyConfig {
+	return SafetyConfig{
+		ReadOnly:     false,
+		BlockFreeSQL: false,
+		AllowedOps:   "", // Empty = all allowed
+	}
+}
+
+// DevelopmentSafetyConfig returns a config suitable for development (local packages only)
+func DevelopmentSafetyConfig() SafetyConfig {
+	return SafetyConfig{
+		ReadOnly:        false,
+		BlockFreeSQL:    true,
+		AllowedPackages: []string{"$TMP", "$TEST"},
+	}
+}
+
+// OperationType represents different operation categories
+type OperationType rune
+
+const (
+	OpRead         OperationType = 'R' // Read operations
+	OpSearch       OperationType = 'S' // Search operations
+	OpQuery        OperationType = 'Q' // Query operations (predefined)
+	OpFreeSQL      OperationType = 'F' // Free SQL queries
+	OpCreate       OperationType = 'C' // Create operations
+	OpUpdate       OperationType = 'U' // Update operations
+	OpDelete       OperationType = 'D' // Delete operations
+	OpActivate     OperationType = 'A' // Activation
+	OpTest         OperationType = 'T' // Unit tests
+	OpLock         OperationType = 'L' // Lock/Unlock
+	OpIntelligence OperationType = 'I' // Code intelligence
+	OpWorkflow     OperationType = 'W' // High-level workflows
+)
+
+// IsOperationAllowed checks if an operation type is allowed by the safety config
+func (s *SafetyConfig) IsOperationAllowed(op OperationType) bool {
+	opChar := rune(op)
+
+	// Check DryRun - all operations are "allowed" but won't execute
+	if s.DryRun {
+		return true
+	}
+
+	// Check ReadOnly mode - blocks all write operations
+	if s.ReadOnly {
+		writeOps := "CDUAW" // Create, Delete, Update, Activate, Workflow
+		if strings.ContainsRune(writeOps, opChar) {
+			return false
+		}
+	}
+
+	// Check BlockFreeSQL
+	if s.BlockFreeSQL && op == OpFreeSQL {
+		return false
+	}
+
+	// Check DisallowedOps (blacklist takes precedence)
+	if s.DisallowedOps != "" && strings.ContainsRune(s.DisallowedOps, opChar) {
+		return false
+	}
+
+	// Check AllowedOps (whitelist)
+	if s.AllowedOps != "" && !strings.ContainsRune(s.AllowedOps, opChar) {
+		return false
+	}
+
+	return true
+}
+
+// CheckOperation returns an error if the operation is not allowed
+func (s *SafetyConfig) CheckOperation(op OperationType, opName string) error {
+	if !s.IsOperationAllowed(op) {
+		return fmt.Errorf("operation '%s' (type %c) is blocked by safety configuration", opName, op)
+	}
+	return nil
+}
+
+// IsPackageAllowed checks if operations on a given package are allowed
+func (s *SafetyConfig) IsPackageAllowed(pkg string) bool {
+	// Empty AllowedPackages = all packages allowed
+	if len(s.AllowedPackages) == 0 {
+		return true
+	}
+
+	pkg = strings.ToUpper(pkg)
+
+	for _, allowed := range s.AllowedPackages {
+		allowed = strings.ToUpper(allowed)
+
+		// Exact match
+		if allowed == pkg {
+			return true
+		}
+
+		// Wildcard match (e.g., "Z*" matches "ZTEST", "ZRAY", etc.)
+		if strings.HasSuffix(allowed, "*") {
+			prefix := strings.TrimSuffix(allowed, "*")
+			if strings.HasPrefix(pkg, prefix) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// CheckPackage returns an error if the package is not allowed
+func (s *SafetyConfig) CheckPackage(pkg string) error {
+	if !s.IsPackageAllowed(pkg) {
+		return fmt.Errorf("operations on package '%s' are blocked by safety configuration (allowed: %v)",
+			pkg, s.AllowedPackages)
+	}
+	return nil
+}
+
+// String returns a human-readable description of the safety configuration
+func (s *SafetyConfig) String() string {
+	var parts []string
+
+	if s.ReadOnly {
+		parts = append(parts, "READ-ONLY")
+	}
+
+	if s.BlockFreeSQL {
+		parts = append(parts, "NO-FREE-SQL")
+	}
+
+	if s.DryRun {
+		parts = append(parts, "DRY-RUN")
+	}
+
+	if s.AllowedOps != "" {
+		parts = append(parts, fmt.Sprintf("AllowedOps=%s", s.AllowedOps))
+	}
+
+	if s.DisallowedOps != "" {
+		parts = append(parts, fmt.Sprintf("DisallowedOps=%s", s.DisallowedOps))
+	}
+
+	if len(s.AllowedPackages) > 0 {
+		parts = append(parts, fmt.Sprintf("AllowedPackages=%v", s.AllowedPackages))
+	}
+
+	if len(parts) == 0 {
+		return "UNRESTRICTED"
+	}
+
+	return strings.Join(parts, ", ")
+}

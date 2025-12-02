@@ -7,6 +7,7 @@ toolchain go1.24.10
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.17.0
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 )
