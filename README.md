@@ -5,7 +5,7 @@
 
 A Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT).
 
-Single-binary distribution of 41 ADT tools for use with Claude and other MCP-compatible AI assistants.
+Single-binary distribution of 39 ADT tools for use with Claude and other MCP-compatible AI assistants.
 
 ## Why This Project?
 
@@ -29,7 +29,7 @@ This project stands on the shoulders of giants:
 
 **mcp-adt-go** is a complete rewrite in Go, providing:
 - Single binary with zero runtime dependencies
-- Extended toolset (36 vs 13 tools)
+- Extended toolset (39 vs 13 tools)
 - Full CRUD operations and code intelligence
 - ~50x faster startup time
 
@@ -85,7 +85,7 @@ Comparison of ADT capabilities across implementations:
 
 **Legend:** Y = Full support, P = Partial, N = Not implemented, - = Not applicable
 
-## Available Tools (41)
+## Available Tools (39)
 
 ### Read Operations (14 tools)
 
@@ -145,16 +145,14 @@ Workflow tools are **composite/multi-step operations** that combine multiple ADT
 
 These tools significantly simplify AI-assisted development by handling locking, error checking, and activation automatically.
 
-### File-Based Deployment Tools (5 tools)
+### File-Based Deployment Tools (3 tools)
 
 **Solves token limit problem** for large generated files (like ML models, complex classes). These tools read/write ABAP source files directly from the filesystem, bypassing Claude's token limits:
 
 | Tool | Description | Use Case |
 |------|-------------|----------|
-| `DeployFromFile` | **Recommended** - Smart deploy: auto-detects if create or update is needed | Deploy any ABAP file (class, program, interface) |
-| `CreateFromFile` | Create new object from file with full workflow | First-time deployment of new objects |
-| `UpdateFromFile` | Update existing object from file with full workflow | Update existing objects from files |
-| `SaveToFile` | Save ABAP object source to local file (SAP → File) | Export objects for version control |
+| `DeployFromFile` | ✅ **RECOMMENDED** - Smart deploy: auto-detects create vs update | Deploy any ABAP file (class, program, interface, function group/module) |
+| `SaveToFile` | Save ABAP object source to local file (SAP → File) | Export objects for version control, bidirectional sync |
 | `RenameObject` | Rename object by creating copy with new name | Fix naming conventions, refactor |
 
 **Workflow executed:** Parse file → Detect type/name → Lock → Syntax check → Write → Unlock → Activate
@@ -363,7 +361,7 @@ vibing-steamer/
 │   ├── fileparser.go        # ABAP file parser (detect type/name from files)
 │   └── xml.go               # XML types and parsing
 ├── internal/mcp/            # MCP server implementation
-│   └── server.go            # Tool registration and handlers (41 tools)
+│   └── server.go            # Tool registration and handlers (39 tools)
 ├── reports/                 # Project documentation and research
 └── build/                   # Cross-platform binaries
 ```
@@ -374,7 +372,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 41 |
+| **Tools** | 39 |
 | **Unit Tests** | 91 (7 new file parser tests) |
 | **Integration Tests** | 20+ |
 | **Platforms** | 9 (Linux, macOS, Windows × amd64/arm64/386) |

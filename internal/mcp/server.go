@@ -524,37 +524,9 @@ func (s *Server) registerTools() {
 
 	// --- File-Based Deployment Tools ---
 
-	// CreateFromFile
-	s.mcpServer.AddTool(mcp.NewTool("CreateFromFile",
-		mcp.WithDescription("Create new ABAP object from file and activate it. Automatically detects object type and name from file extension and content. Handles complete workflow: parse -> create -> lock -> syntax check -> write -> unlock -> activate. Supports large files without token limits."),
-		mcp.WithString("file_path",
-			mcp.Required(),
-			mcp.Description("Absolute path to ABAP source file (e.g., /home/user/zcl_ml_iris.clas.abap). Supported extensions: .clas.abap, .prog.abap, .intf.abap, .fugr.abap, .func.abap"),
-		),
-		mcp.WithString("package_name",
-			mcp.Required(),
-			mcp.Description("Package name (e.g., $ZAML_IRIS)"),
-		),
-		mcp.WithString("transport",
-			mcp.Description("Transport request number (optional for local packages)"),
-		),
-	), s.handleCreateFromFile)
-
-	// UpdateFromFile
-	s.mcpServer.AddTool(mcp.NewTool("UpdateFromFile",
-		mcp.WithDescription("Update existing ABAP object from file and activate it. Automatically detects object type and name from file. Handles complete workflow: parse -> lock -> syntax check -> write -> unlock -> activate. Supports large files without token limits."),
-		mcp.WithString("file_path",
-			mcp.Required(),
-			mcp.Description("Absolute path to ABAP source file"),
-		),
-		mcp.WithString("transport",
-			mcp.Description("Transport request number (optional for local packages)"),
-		),
-	), s.handleUpdateFromFile)
-
-	// DeployFromFile
+	// DeployFromFile (Recommended)
 	s.mcpServer.AddTool(mcp.NewTool("DeployFromFile",
-		mcp.WithDescription("Smart deploy: creates new or updates existing ABAP object from file. Automatically detects if object exists and chooses create or update workflow. Recommended for code generation workflows. Supports large files without token limits."),
+		mcp.WithDescription("✅ RECOMMENDED - Smart deploy from file: auto-detects if object exists and creates/updates accordingly. Solves token limit problem for large generated files (ML models, etc). Workflow: Parse → Check existence → Create or Update → Lock → SyntaxCheck → Write → Unlock → Activate. Supports .clas.abap, .prog.abap, .intf.abap, .fugr.abap, .func.abap"),
 		mcp.WithString("file_path",
 			mcp.Required(),
 			mcp.Description("Absolute path to ABAP source file"),
@@ -1357,50 +1329,7 @@ func (s *Server) handleCreateClassWithTests(ctx context.Context, request mcp.Cal
 
 // --- File-Based Deployment Handlers ---
 
-func (s *Server) handleCreateFromFile(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	filePath, ok := request.Params.Arguments["file_path"].(string)
-	if !ok || filePath == "" {
-		return newToolResultError("file_path is required"), nil
-	}
-
-	packageName, ok := request.Params.Arguments["package_name"].(string)
-	if !ok || packageName == "" {
-		return newToolResultError("package_name is required"), nil
-	}
-
-	transport := ""
-	if t, ok := request.Params.Arguments["transport"].(string); ok {
-		transport = t
-	}
-
-	result, err := s.adtClient.CreateFromFile(ctx, filePath, packageName, transport)
-	if err != nil {
-		return newToolResultError(fmt.Sprintf("CreateFromFile failed: %v", err)), nil
-	}
-
-	output, _ := json.MarshalIndent(result, "", "  ")
-	return mcp.NewToolResultText(string(output)), nil
-}
-
-func (s *Server) handleUpdateFromFile(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	filePath, ok := request.Params.Arguments["file_path"].(string)
-	if !ok || filePath == "" {
-		return newToolResultError("file_path is required"), nil
-	}
-
-	transport := ""
-	if t, ok := request.Params.Arguments["transport"].(string); ok {
-		transport = t
-	}
-
-	result, err := s.adtClient.UpdateFromFile(ctx, filePath, transport)
-	if err != nil {
-		return newToolResultError(fmt.Sprintf("UpdateFromFile failed: %v", err)), nil
-	}
-
-	output, _ := json.MarshalIndent(result, "", "  ")
-	return mcp.NewToolResultText(string(output)), nil
-}
+// Note: CreateFromFile and UpdateFromFile handlers removed - use DeployFromFile instead
 
 func (s *Server) handleDeployFromFile(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	filePath, ok := request.Params.Arguments["file_path"].(string)
