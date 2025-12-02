@@ -27,6 +27,12 @@ type Config struct {
 	Client             string
 	Language           string
 	InsecureSkipVerify bool
+
+	// Cookie authentication (alternative to basic auth)
+	Cookies map[string]string
+
+	// Verbose output
+	Verbose bool
 }
 
 // NewServer creates a new MCP server for ABAP ADT tools.
@@ -38,6 +44,12 @@ func NewServer(cfg *Config) *Server {
 	}
 	if cfg.InsecureSkipVerify {
 		opts = append(opts, adt.WithInsecureSkipVerify())
+	}
+	if len(cfg.Cookies) > 0 {
+		opts = append(opts, adt.WithCookies(cfg.Cookies))
+	}
+	if cfg.Verbose {
+		opts = append(opts, adt.WithVerbose())
 	}
 
 	adtClient := adt.NewClient(cfg.BaseURL, cfg.Username, cfg.Password, opts...)

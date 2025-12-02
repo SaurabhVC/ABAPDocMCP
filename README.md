@@ -37,47 +37,47 @@ This project stands on the shoulders of giants:
 
 Comparison of ADT capabilities across implementations:
 
-| Capability | ADT (Eclipse) | abap-adt-api (TS) | mcp-abap-adt (TS) | **mcp-adt-go** |
-|------------|:-------------:|:-----------------:|:-----------------:|:-------------------:|
+| Capability | ADT (Eclipse) | abap-adt-api (TS) | **mcp-adt-go** |
+|------------|:-------------:|:-----------------:|:--------------:|
 | **Source Read** |
-| Programs, Classes, Interfaces | Y | Y | Y | **Y** |
-| Functions, Function Groups | Y | Y | Y | **Y** |
-| Tables, Structures | Y | Y | Y | **Y** |
-| Includes | Y | Y | Y | **Y** |
-| Package Contents | Y | Y | Y | **Y** |
-| Type Info | Y | Y | P | **Y** |
-| CDS Views | Y | Y | N | N |
-| RAP/BDEF | Y | Y | N | N |
+| Programs, Classes, Interfaces | Y | Y | **Y** |
+| Functions, Function Groups | Y | Y | **Y** |
+| Tables, Structures | Y | Y | **Y** |
+| Includes | Y | Y | **Y** |
+| Package Contents | Y | Y | **Y** |
+| Type Info | Y | Y | **Y** |
+| CDS Views | Y | Y | N |
+| RAP/BDEF | Y | Y | N |
 | **Data Query** |
-| Table Contents | Y | Y | P | **Y** |
-| SQL Filtering | Y | Y | N | **Y** |
-| Freestyle SQL | Y | Y | N | **Y** |
+| Table Contents | Y | Y | **Y** |
+| SQL Filtering | Y | Y | **Y** |
+| Freestyle SQL | Y | Y | **Y** |
 | **Development Tools** |
-| Syntax Check | Y | Y | N | **Y** |
-| Activation | Y | Y | N | **Y** |
-| Unit Tests | Y | Y | N | **Y** |
+| Syntax Check | Y | Y | **Y** |
+| Activation | Y | Y | **Y** |
+| Unit Tests | Y | Y | **Y** |
 | **CRUD Operations** |
-| Lock/Unlock | Y | Y | N | **Y** |
-| Create Objects | Y | Y | N | **Y** |
-| Update Source | Y | Y | N | **Y** |
-| Delete Objects | Y | Y | N | **Y** |
-| Class Includes | Y | Y | N | **Y** |
+| Lock/Unlock | Y | Y | **Y** |
+| Create Objects | Y | Y | **Y** |
+| Update Source | Y | Y | **Y** |
+| Delete Objects | Y | Y | **Y** |
+| Class Includes | Y | Y | **Y** |
 | **Code Intelligence** |
-| Find Definition | Y | Y | N | **Y** |
-| Find References | Y | Y | N | **Y** |
-| Code Completion | Y | Y | N | **Y** |
-| Type Hierarchy | Y | Y | N | **Y** |
-| Pretty Printer | Y | Y | N | **Y** |
+| Find Definition | Y | Y | **Y** |
+| Find References | Y | Y | **Y** |
+| Code Completion | Y | Y | **Y** |
+| Type Hierarchy | Y | Y | **Y** |
+| Pretty Printer | Y | Y | **Y** |
 | **Workflow Tools** |
-| Write & Activate | - | - | N | **Y** |
-| Create & Activate | - | - | N | **Y** |
-| Create with Tests | - | - | N | **Y** |
+| Write & Activate | - | - | **Y** |
+| Create & Activate | - | - | **Y** |
+| Create with Tests | - | - | **Y** |
 | **Transports** |
-| Transport Management | Y | Y | N | N |
+| Transport Management | Y | Y | N |
 | **ATC** |
-| Code Quality Checks | Y | Y | N | N |
+| Code Quality Checks | Y | Y | N |
 | **Debugging** |
-| Remote Debugging | Y | Y | N | N |
+| Remote Debugging | Y | Y | N |
 
 **Legend:** Y = Full support, P = Partial, N = Not implemented, - = Not applicable
 
@@ -130,12 +130,16 @@ Comparison of ADT capabilities across implementations:
 
 ### Workflow Tools (4 tools)
 
-| Tool | Description |
-|------|-------------|
-| `WriteProgram` | Update existing program with syntax check and activation |
-| `WriteClass` | Update existing class with syntax check and activation |
-| `CreateAndActivateProgram` | Create new program with source and activate it |
-| `CreateClassWithTests` | Create class with unit tests and run them |
+Workflow tools are **composite/multi-step operations** that combine multiple ADT API calls into a single tool. They reduce round-trips and handle the complex orchestration required for common development tasks:
+
+| Tool | Description | Steps Performed |
+|------|-------------|-----------------|
+| `WriteProgram` | Update existing program with syntax check and activation | Lock → SyntaxCheck → UpdateSource → Unlock → Activate |
+| `WriteClass` | Update existing class with syntax check and activation | Lock → SyntaxCheck → UpdateSource → Unlock → Activate |
+| `CreateAndActivateProgram` | Create new program with source and activate it | Create → UpdateSource → Activate |
+| `CreateClassWithTests` | Create class with unit tests and run them | Create → Lock → UpdateSource → CreateTestInclude → WriteTests → Unlock → Activate → RunUnitTests |
+
+These tools significantly simplify AI-assisted development by handling locking, error checking, and activation automatically.
 
 ### Code Intelligence Tools (7 tools)
 
@@ -175,16 +179,76 @@ make build-all
 
 ## Configuration
 
-The server is configured via environment variables:
+The server supports multiple configuration methods with the following priority: **CLI flags > Environment variables > .env file > Defaults**
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SAP_URL` | Yes | - | SAP system URL (e.g., `https://host:44300`) |
-| `SAP_USER` | Yes | - | SAP username |
-| `SAP_PASSWORD` | Yes | - | SAP password |
-| `SAP_CLIENT` | No | `001` | SAP client number |
-| `SAP_LANGUAGE` | No | `EN` | SAP language |
-| `SAP_INSECURE` | No | `false` | Skip TLS certificate verification |
+### CLI Flags
+
+```bash
+mcp-adt-go --url https://host:44300 --user admin --password secret
+mcp-adt-go --url https://host:44300 --cookie-string "sap-usercontext=..."
+mcp-adt-go --url https://host:44300 --cookie-file cookies.txt
+mcp-adt-go --help  # Show all options
+```
+
+| Flag | Alias | Description |
+|------|-------|-------------|
+| `--url` | `--service` | SAP system URL (e.g., `https://host:44300`) |
+| `--user` | `-u` | SAP username |
+| `--password` | `-p`, `--pass` | SAP password |
+| `--client` | | SAP client number (default: `001`) |
+| `--language` | | SAP language (default: `EN`) |
+| `--insecure` | | Skip TLS certificate verification |
+| `--cookie-file` | | Path to Netscape-format cookie file |
+| `--cookie-string` | | Cookie string (`key1=val1; key2=val2`) |
+| `--verbose` | `-v` | Enable verbose logging to stderr |
+| `--version` | | Show version information |
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `SAP_URL` | SAP system URL |
+| `SAP_USER` | SAP username |
+| `SAP_PASSWORD` | SAP password |
+| `SAP_CLIENT` | SAP client number |
+| `SAP_LANGUAGE` | SAP language |
+| `SAP_INSECURE` | Skip TLS verification (`true`/`false`) |
+| `SAP_COOKIE_FILE` | Path to cookie file |
+| `SAP_COOKIE_STRING` | Cookie string |
+| `SAP_VERBOSE` | Enable verbose logging |
+
+### .env File Support
+
+The server automatically loads `.env` from the current directory:
+
+```bash
+# .env
+SAP_URL=https://host:44300
+SAP_USER=developer
+SAP_PASSWORD=secret
+SAP_CLIENT=001
+SAP_INSECURE=true
+```
+
+### Authentication Methods
+
+The server supports two authentication methods (only one can be used at a time):
+
+1. **Basic Authentication** (username/password)
+   ```bash
+   mcp-adt-go --url https://host:44300 --user admin --password secret
+   ```
+
+2. **Cookie Authentication** (session cookies)
+   ```bash
+   # From cookie string
+   mcp-adt-go --url https://host:44300 --cookie-string "sap-usercontext=abc; SAP_SESSIONID=xyz"
+
+   # From Netscape-format cookie file
+   mcp-adt-go --url https://host:44300 --cookie-file cookies.txt
+   ```
+
+Cookie authentication is useful when you have an existing browser session or need to bypass SSO.
 
 ## Usage with Claude Desktop
 
@@ -272,24 +336,6 @@ mcp-adt-go/
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
-
-## Comparison Summary
-
-| Aspect | mcp-abap-adt (TS) | mcp-adt-go |
-|--------|-------------------|-----------------|
-| **Tools** | 13 | **36** |
-| **Language** | TypeScript | Go |
-| **Runtime** | Node.js required | Single binary |
-| **Distribution** | npm install | Download & run |
-| **Startup Time** | ~500ms | **~10ms** |
-| **SQL Queries** | No | **Yes** |
-| **Syntax Check** | No | **Yes** |
-| **Unit Tests** | No | **Yes** |
-| **Activation** | No | **Yes** |
-| **CRUD Operations** | No | **Yes** |
-| **Class Includes** | No | **Yes** |
-| **Code Intelligence** | No | **Yes** |
-| **Workflow Tools** | No | **Yes** |
 
 ## Roadmap
 

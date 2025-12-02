@@ -92,8 +92,15 @@ func (t *Transport) Request(ctx context.Context, path string, opts *RequestOptio
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	// Set authentication
-	req.SetBasicAuth(t.config.Username, t.config.Password)
+	// Set authentication - either basic auth or cookies
+	if t.config.HasBasicAuth() {
+		req.SetBasicAuth(t.config.Username, t.config.Password)
+	}
+
+	// Add user-provided cookies for cookie-based authentication
+	for name, value := range t.config.Cookies {
+		req.AddCookie(&http.Cookie{Name: name, Value: value})
+	}
 
 	// Set default headers
 	t.setDefaultHeaders(req, opts)
@@ -178,7 +185,13 @@ func (t *Transport) retryRequest(ctx context.Context, path string, opts *Request
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	req.SetBasicAuth(t.config.Username, t.config.Password)
+	// Set authentication
+	if t.config.HasBasicAuth() {
+		req.SetBasicAuth(t.config.Username, t.config.Password)
+	}
+	for name, value := range t.config.Cookies {
+		req.AddCookie(&http.Cookie{Name: name, Value: value})
+	}
 	t.setDefaultHeaders(req, opts)
 	req.Header.Set("X-CSRF-Token", t.getCSRFToken())
 
@@ -225,7 +238,13 @@ func (t *Transport) fetchCSRFToken(ctx context.Context) error {
 		return fmt.Errorf("creating request: %w", err)
 	}
 
-	req.SetBasicAuth(t.config.Username, t.config.Password)
+	// Set authentication
+	if t.config.HasBasicAuth() {
+		req.SetBasicAuth(t.config.Username, t.config.Password)
+	}
+	for name, value := range t.config.Cookies {
+		req.AddCookie(&http.Cookie{Name: name, Value: value})
+	}
 	req.Header.Set("X-CSRF-Token", "fetch")
 	req.Header.Set("Accept", "*/*")
 

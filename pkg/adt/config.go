@@ -38,6 +38,10 @@ type Config struct {
 	SessionType SessionType
 	// Timeout for HTTP requests
 	Timeout time.Duration
+	// Cookies for cookie-based authentication (alternative to basic auth)
+	Cookies map[string]string
+	// Verbose enables verbose logging
+	Verbose bool
 }
 
 // Option is a functional option for configuring the ADT client.
@@ -76,6 +80,30 @@ func WithTimeout(d time.Duration) Option {
 	return func(c *Config) {
 		c.Timeout = d
 	}
+}
+
+// WithCookies sets cookies for cookie-based authentication.
+func WithCookies(cookies map[string]string) Option {
+	return func(c *Config) {
+		c.Cookies = cookies
+	}
+}
+
+// WithVerbose enables verbose logging.
+func WithVerbose() Option {
+	return func(c *Config) {
+		c.Verbose = true
+	}
+}
+
+// HasBasicAuth returns true if username and password are configured.
+func (c *Config) HasBasicAuth() bool {
+	return c.Username != "" && c.Password != ""
+}
+
+// HasCookieAuth returns true if cookies are configured.
+func (c *Config) HasCookieAuth() bool {
+	return len(c.Cookies) > 0
 }
 
 // NewConfig creates a new Config with the given base URL, username, password,

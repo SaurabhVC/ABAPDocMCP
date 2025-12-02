@@ -22,16 +22,31 @@ SAP_URL=http://host:port SAP_USER=user SAP_PASSWORD=pass SAP_CLIENT=001 \
   go test -tags=integration -v ./pkg/adt/
 ```
 
-### Required Environment Variables
+### Configuration (Priority: CLI > Env > .env > Defaults)
 
-| Variable | Description |
-|----------|-------------|
-| `SAP_URL` | SAP system URL (e.g., `http://host:50000`) |
-| `SAP_USER` | SAP username |
-| `SAP_PASSWORD` | SAP password |
-| `SAP_CLIENT` | SAP client number (default: 001) |
-| `SAP_LANGUAGE` | SAP language (default: EN) |
-| `SAP_INSECURE` | Skip TLS verification (default: false) |
+```bash
+# Using CLI flags
+./mcp-adt-go --url http://host:50000 --user admin --password secret
+
+# Using environment variables
+SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./mcp-adt-go
+
+# Using cookie authentication
+./mcp-adt-go --url http://host:50000 --cookie-string "sap-usercontext=abc; SAP_SESSIONID=xyz"
+./mcp-adt-go --url http://host:50000 --cookie-file cookies.txt
+```
+
+| Variable / Flag | Description |
+|-----------------|-------------|
+| `SAP_URL` / `--url` | SAP system URL (e.g., `http://host:50000`) |
+| `SAP_USER` / `--user` | SAP username |
+| `SAP_PASSWORD` / `--password` | SAP password |
+| `SAP_CLIENT` / `--client` | SAP client number (default: 001) |
+| `SAP_LANGUAGE` / `--language` | SAP language (default: EN) |
+| `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
+| `SAP_COOKIE_FILE` / `--cookie-file` | Path to Netscape-format cookie file |
+| `SAP_COOKIE_STRING` / `--cookie-string` | Cookie string (key1=val1; key2=val2) |
+| `SAP_VERBOSE` / `--verbose` | Enable verbose logging to stderr |
 
 ## Codebase Structure
 
@@ -46,6 +61,7 @@ pkg/adt/
 ├── workflows.go              # High-level workflow operations
 ├── http.go                   # HTTP transport (CSRF, sessions)
 ├── config.go                 # Configuration
+├── cookies.go                # Cookie file parsing (Netscape format)
 └── xml.go                    # XML types
 ```
 
