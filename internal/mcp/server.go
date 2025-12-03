@@ -580,6 +580,31 @@ func (s *Server) registerTools() {
 		),
 	), s.handleRenameObject)
 
+	// --- Surgical Edit Tools ---
+
+	// EditSource
+	s.mcpServer.AddTool(mcp.NewTool("EditSource",
+		mcp.WithDescription("Surgical string replacement on ABAP source code. Matches the Edit tool pattern for local files. Workflow: GetSource → FindReplace → SyntaxCheck → Lock → Update → Unlock → Activate. Example: EditSource(object_url=\"/sap/bc/adt/programs/programs/ZTEST\", old_string=\"METHOD foo.\\n  ENDMETHOD.\", new_string=\"METHOD foo.\\n  rv_result = 42.\\n  ENDMETHOD.\", replace_all=false, syntax_check=true). Requires unique match if replace_all=false. Use this for incremental edits between syntax checks - no need to download/upload full source!"),
+		mcp.WithString("object_url",
+			mcp.Required(),
+			mcp.Description("ADT URL of object (e.g., /sap/bc/adt/programs/programs/ZTEST, /sap/bc/adt/oo/classes/zcl_test)"),
+		),
+		mcp.WithString("old_string",
+			mcp.Required(),
+			mcp.Description("Exact string to find and replace. Must be unique in source if replace_all=false. Include enough context (surrounding lines) to ensure uniqueness."),
+		),
+		mcp.WithString("new_string",
+			mcp.Required(),
+			mcp.Description("Replacement string. Can be multiline (use \\n). Length can differ from old_string."),
+		),
+		mcp.WithBoolean("replace_all",
+			mcp.Description("If true, replace all occurrences. If false (default), require unique match. Default: false"),
+		),
+		mcp.WithBoolean("syntax_check",
+			mcp.Description("If true (default), validate syntax before saving. If syntax errors found, changes are NOT saved. Default: true"),
+		),
+	), s.handleEditSource)
+
 	// --- Code Intelligence Tools ---
 
 	// FindDefinition
@@ -1456,6 +1481,41 @@ func (s *Server) handleRenameObject(ctx context.Context, request mcp.CallToolReq
 	result, err := s.adtClient.RenameObject(ctx, objType, oldName, newName, packageName, transport)
 	if err != nil {
 		return newToolResultError(fmt.Sprintf("RenameObject failed: %v", err)), nil
+	}
+
+	output, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(output)), nil
+}
+
+func (s *Server) handleEditSource(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	objectURL, ok := request.Params.Arguments["object_url"].(string)
+	if !ok || objectURL == "" {
+		return newToolResultError("object_url is required"), nil
+	}
+
+	oldString, ok := request.Params.Arguments["old_string"].(string)
+	if !ok || oldString == "" {
+		return newToolResultError("old_string is required"), nil
+	}
+
+	newString, ok := request.Params.Arguments["new_string"].(string)
+	if !ok {
+		return newToolResultError("new_string is required"), nil
+	}
+
+	replaceAll := false
+	if r, ok := request.Params.Arguments["replace_all"].(bool); ok {
+		replaceAll = r
+	}
+
+	syntaxCheck := true
+	if sc, ok := request.Params.Arguments["syntax_check"].(bool); ok {
+		syntaxCheck = sc
+	}
+
+	result, err := s.adtClient.EditSource(ctx, objectURL, oldString, newString, replaceAll, syntaxCheck)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("EditSource failed: %v", err)), nil
 	}
 
 	output, _ := json.MarshalIndent(result, "", "  ")

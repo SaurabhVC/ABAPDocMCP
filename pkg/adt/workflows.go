@@ -958,3 +958,160 @@ func (c *Client) SaveToFile(ctx context.Context, objType CreatableObjectType, ob
 	result.Message = fmt.Sprintf("Saved %s %s to %s (%d lines)", objType, objectName, result.FilePath, result.LineCount)
 	return result, nil
 }
+
+// --- Surgical Edit Tools ---
+
+// EditSourceResult represents the result of editing source code.
+type EditSourceResult struct {
+	Success       bool                `json:"success"`
+	ObjectURL     string              `json:"objectUrl"`
+	ObjectName    string              `json:"objectName"`
+	MatchCount    int                 `json:"matchCount"`
+	OldString     string              `json:"oldString,omitempty"`
+	NewString     string              `json:"newString,omitempty"`
+	SyntaxErrors  []string            `json:"syntaxErrors,omitempty"`
+	Activation    *ActivationResult   `json:"activation,omitempty"`
+	Message       string              `json:"message,omitempty"`
+}
+
+// EditSource performs surgical string replacement on ABAP source code.
+//
+// This tool matches the Edit pattern used for local files, enabling surgical
+// edits without downloading/uploading full source each time.
+//
+// Workflow: GetSource → FindReplace → SyntaxCheck → Lock → UpdateSource → Unlock → Activate
+//
+// Parameters:
+//   - objectURL: ADT URL (e.g., /sap/bc/adt/programs/programs/ZTEST)
+//   - oldString: Exact string to find (must be unique in source)
+//   - newString: Replacement string
+//   - replaceAll: If true, replace all occurrences; if false, require unique match
+//   - syntaxCheck: If true, validate syntax before saving (default: true)
+//
+// Example:
+//   EditSource(ctx, "/sap/bc/adt/programs/programs/ZTEST",
+//     "METHOD foo.\n  ENDMETHOD.",
+//     "METHOD foo.\n  rv_result = 42.\n  ENDMETHOD.",
+//     false, true)
+func (c *Client) EditSource(ctx context.Context, objectURL, oldString, newString string, replaceAll, syntaxCheck bool) (*EditSourceResult, error) {
+	// Safety check
+	if err := c.checkSafety(OpUpdate, "EditSource"); err != nil {
+		return nil, err
+	}
+
+	result := &EditSourceResult{
+		ObjectURL: objectURL,
+		OldString: oldString,
+		NewString: newString,
+	}
+
+	// Extract object name from URL for error messages
+	parts := strings.Split(objectURL, "/")
+	if len(parts) > 0 {
+		result.ObjectName = parts[len(parts)-1]
+	}
+
+	// 1. Get current source
+	sourceURL := objectURL
+	if !strings.HasSuffix(sourceURL, "/source/main") {
+		sourceURL = objectURL + "/source/main"
+	}
+
+	resp, err := c.transport.Request(ctx, sourceURL, &RequestOptions{
+		Method: "GET",
+		Accept: "text/plain",
+	})
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to read source: %v", err)
+		return result, nil
+	}
+	source := string(resp.Body)
+
+	// 2. Check match count
+	matchCount := strings.Count(source, oldString)
+	result.MatchCount = matchCount
+
+	if matchCount == 0 {
+		result.Message = "old_string not found in source. Check for exact match (including whitespace, line breaks, case)."
+		return result, nil
+	}
+
+	if !replaceAll && matchCount > 1 {
+		result.Message = fmt.Sprintf("old_string matches %d locations (not unique). Set replaceAll=true to replace all, or include more surrounding context to make match unique.", matchCount)
+		return result, nil
+	}
+
+	// 3. Apply replacement
+	var newSource string
+	if replaceAll {
+		newSource = strings.ReplaceAll(source, oldString, newString)
+	} else {
+		newSource = strings.Replace(source, oldString, newString, 1)
+	}
+
+	// 4. Optional syntax check
+	if syntaxCheck {
+		syntaxErrors, err := c.SyntaxCheck(ctx, objectURL, newSource)
+		if err != nil {
+			result.Message = fmt.Sprintf("Syntax check failed: %v", err)
+			return result, nil
+		}
+
+		if len(syntaxErrors) > 0 {
+			// Convert to string messages
+			errorMsgs := make([]string, len(syntaxErrors))
+			for i, e := range syntaxErrors {
+				errorMsgs[i] = fmt.Sprintf("Line %d: %s", e.Line, e.Text)
+			}
+			result.SyntaxErrors = errorMsgs
+			result.Message = fmt.Sprintf("Edit would introduce %d syntax errors. Changes NOT saved.", len(syntaxErrors))
+			return result, nil
+		}
+	}
+
+	// 5. Lock object
+	lockResult, err := c.LockObject(ctx, objectURL, "MODIFY")
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to lock object: %v", err)
+		return result, nil
+	}
+
+	// Ensure unlock
+	unlocked := false
+	defer func() {
+		if !unlocked {
+			_ = c.UnlockObject(ctx, objectURL, lockResult.LockHandle)
+		}
+	}()
+
+	// 6. Update source
+	err = c.UpdateSource(ctx, sourceURL, newSource, lockResult.LockHandle, "")
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to update source: %v", err)
+		return result, nil
+	}
+
+	// 7. Unlock
+	err = c.UnlockObject(ctx, objectURL, lockResult.LockHandle)
+	unlocked = true
+	if err != nil {
+		result.Message = fmt.Sprintf("Source updated but unlock failed: %v", err)
+		return result, nil
+	}
+
+	// 8. Activate
+	activation, err := c.Activate(ctx, objectURL, result.ObjectName)
+	if err != nil {
+		result.Message = fmt.Sprintf("Source updated but activation failed: %v", err)
+		return result, nil
+	}
+	result.Activation = activation
+
+	result.Success = true
+	if replaceAll {
+		result.Message = fmt.Sprintf("Successfully replaced %d occurrences and activated %s", matchCount, result.ObjectName)
+	} else {
+		result.Message = fmt.Sprintf("Successfully edited and activated %s", result.ObjectName)
+	}
+	return result, nil
+}

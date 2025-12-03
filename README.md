@@ -5,7 +5,7 @@
 
 A Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT).
 
-Single-binary distribution of 39 ADT tools for use with Claude and other MCP-compatible AI assistants.
+Single-binary distribution of 40 ADT tools for use with Claude and other MCP-compatible AI assistants.
 
 ## Why This Project?
 
@@ -69,6 +69,7 @@ Comparison of ADT capabilities across implementations:
 | Type Hierarchy | Y | Y | **Y** |
 | Pretty Printer | Y | Y | **Y** |
 | **Workflow Tools** |
+| Surgical Edit (Edit tool pattern) | - | - | **Y** |
 | Write & Activate | - | - | **Y** |
 | Create & Activate | - | - | **Y** |
 | Create with Tests | - | - | **Y** |
@@ -85,7 +86,7 @@ Comparison of ADT capabilities across implementations:
 
 **Legend:** Y = Full support, P = Partial, N = Not implemented, - = Not applicable
 
-## Available Tools (39)
+## Available Tools (40)
 
 ### Read Operations (14 tools)
 
@@ -132,12 +133,13 @@ Comparison of ADT capabilities across implementations:
 | `CreateTestInclude` | Create test classes include for a class |
 | `UpdateClassInclude` | Update class include source |
 
-### Workflow Tools (4 tools)
+### Workflow Tools (5 tools)
 
 Workflow tools are **composite/multi-step operations** that combine multiple ADT API calls into a single tool. They reduce round-trips and handle the complex orchestration required for common development tasks:
 
 | Tool | Description | Steps Performed |
 |------|-------------|-----------------|
+| `EditSource` | ✅ **RECOMMENDED** - Surgical string replacement on ABAP source. Matches Edit tool pattern for local files. | GetSource → FindReplace → SyntaxCheck → Lock → Update → Unlock → Activate |
 | `WriteProgram` | Update existing program with syntax check and activation | Lock → SyntaxCheck → UpdateSource → Unlock → Activate |
 | `WriteClass` | Update existing class with syntax check and activation | Lock → SyntaxCheck → UpdateSource → Unlock → Activate |
 | `CreateAndActivateProgram` | Create new program with source and activate it | Create → UpdateSource → Activate |
@@ -372,9 +374,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 39 |
+| **Tools** | 40 |
 | **Unit Tests** | 91 (7 new file parser tests) |
-| **Integration Tests** | 20+ |
+| **Integration Tests** | 21+ |
 | **Platforms** | 9 (Linux, macOS, Windows × amd64/arm64/386) |
 
 ## Roadmap

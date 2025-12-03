@@ -1165,3 +1165,136 @@ func TestIntegration_CreatePackage(t *testing.T) {
 
 	t.Logf("Package %s deleted successfully", packageName)
 }
+
+// TestIntegration_EditSource tests the EditSource workflow (surgical string replacement)
+func TestIntegration_EditSource(t *testing.T) {
+	client := getIntegrationClient(t)
+	ctx := context.Background()
+
+	// Create a test program
+	timestamp := time.Now().Unix() % 100000
+	programName := fmt.Sprintf("ZMCPE_%05d", timestamp)
+	t.Logf("Test program name: %s", programName)
+
+	err := client.CreateObject(ctx, CreateObjectOptions{
+		ObjectType:  ObjectTypeProgram,
+		Name:        programName,
+		Description: "Test for EditSource workflow",
+		PackageName: "$TMP",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test program: %v", err)
+	}
+
+	// Cleanup at end
+	defer func() {
+		objectURL := fmt.Sprintf("/sap/bc/adt/programs/programs/%s", programName)
+		lock, _ := client.LockObject(ctx, objectURL, "MODIFY")
+		if lock != nil {
+			client.DeleteObject(ctx, objectURL, lock.LockHandle, "")
+		}
+	}()
+
+	// Set initial source using WriteProgram
+	initialSource := fmt.Sprintf(`REPORT %s.
+
+* Initial version
+DATA: lv_count TYPE i.
+lv_count = 10.
+WRITE: / 'Count:', lv_count.`, strings.ToLower(programName))
+
+	_, err = client.WriteProgram(ctx, programName, initialSource, "")
+	if err != nil {
+		t.Fatalf("WriteProgram failed: %v", err)
+	}
+
+	// Test 1: EditSource - simple replacement
+	objectURL := fmt.Sprintf("/sap/bc/adt/programs/programs/%s", programName)
+	result, err := client.EditSource(ctx, objectURL,
+		"lv_count = 10.",
+		"lv_count = 42.",
+		false, // replaceAll
+		true,  // syntaxCheck
+	)
+	if err != nil {
+		t.Fatalf("EditSource failed: %v", err)
+	}
+
+	t.Logf("EditSource result: success=%v, message=%s, matchCount=%d", result.Success, result.Message, result.MatchCount)
+
+	if !result.Success {
+		t.Fatalf("EditSource did not succeed: %s", result.Message)
+	}
+
+	if result.MatchCount != 1 {
+		t.Errorf("Expected matchCount=1, got %d", result.MatchCount)
+	}
+
+	// Verify the change was applied
+	source, err := client.GetProgram(ctx, programName)
+	if err != nil {
+		t.Fatalf("Failed to read program after edit: %v", err)
+	}
+
+	if !strings.Contains(source, "lv_count = 42.") {
+		t.Errorf("Expected source to contain 'lv_count = 42.', but it doesn't:\n%s", source)
+	}
+
+	// Test 2: EditSource - change to different value
+	result, err = client.EditSource(ctx, objectURL,
+		"lv_count = 42.",
+		"lv_count = 99.",
+		false,
+		true,
+	)
+	if err != nil {
+		t.Fatalf("EditSource (second edit) failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Fatalf("EditSource (second edit) did not succeed: %s", result.Message)
+	}
+
+	// Verify second change
+	source, err = client.GetProgram(ctx, programName)
+	if err != nil {
+		t.Fatalf("Failed to read program after second edit: %v", err)
+	}
+
+	if !strings.Contains(source, "lv_count = 99.") {
+		t.Errorf("Expected source to contain 'lv_count = 99.', but it doesn't:\n%s", source)
+	}
+
+	// Test 3: EditSource - syntax error detection
+	result, err = client.EditSource(ctx, objectURL,
+		"lv_count = 99.",
+		"lv_count = INVALID SYNTAX HERE",
+		false,
+		true, // Should detect syntax error
+	)
+	if err != nil {
+		t.Fatalf("EditSource (syntax error test) failed: %v", err)
+	}
+
+	if result.Success {
+		t.Errorf("EditSource should have failed due to syntax errors")
+	}
+
+	if len(result.SyntaxErrors) == 0 {
+		t.Errorf("Expected syntax errors to be detected")
+	} else {
+		t.Logf("Syntax error correctly detected: %v", result.SyntaxErrors[0])
+	}
+
+	// Verify source wasn't changed (syntax check prevented it)
+	source, err = client.GetProgram(ctx, programName)
+	if err != nil {
+		t.Fatalf("Failed to read program after syntax error test: %v", err)
+	}
+
+	if !strings.Contains(source, "lv_count = 99.") {
+		t.Errorf("Source should not have changed due to syntax error")
+	}
+
+	t.Log("EditSource workflow completed successfully!")
+}
