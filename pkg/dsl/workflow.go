@@ -109,14 +109,14 @@ func (e *WorkflowEngine) ParseWorkflow(data []byte) (*Workflow, error) {
 func (e *WorkflowEngine) Execute(ctx context.Context, workflow *Workflow, opts ...ExecuteOption) (*WorkflowResult, error) {
 	execCtx := NewExecutionContext(ctx, e.client)
 
-	// Apply options
-	for _, opt := range opts {
-		opt(execCtx)
+	// Set workflow variables first (literal values, no env expansion)
+	for k, v := range workflow.Variables {
+		execCtx.SetVariable(k, v)
 	}
 
-	// Set workflow variables
-	for k, v := range workflow.Variables {
-		execCtx.SetVariable(k, e.expandEnvVars(v))
+	// Apply options AFTER workflow variables (so WithVariables can override)
+	for _, opt := range opts {
+		opt(execCtx)
 	}
 
 	result := &WorkflowResult{
@@ -250,7 +250,8 @@ func (e *WorkflowEngine) expandParams(ctx *ExecutionContext, params map[string]i
 func (e *WorkflowEngine) expandValue(ctx *ExecutionContext, v interface{}) interface{} {
 	switch val := v.(type) {
 	case string:
-		// Expand ${var} references to context variables
+		// Expand ${var} references to context variables and env vars
+		// Note: Only ${VAR} syntax is supported, NOT $VAR (conflicts with SAP package names like $TMP)
 		re := regexp.MustCompile(`\$\{(\w+)\}`)
 		expanded := re.ReplaceAllStringFunc(val, func(match string) string {
 			varName := match[2 : len(match)-1]
@@ -262,7 +263,7 @@ func (e *WorkflowEngine) expandValue(ctx *ExecutionContext, v interface{}) inter
 			}
 			return os.Getenv(varName)
 		})
-		return e.expandEnvVars(expanded)
+		return expanded
 	case []interface{}:
 		result := make([]interface{}, len(val))
 		for i, item := range val {
