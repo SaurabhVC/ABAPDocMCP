@@ -3,7 +3,7 @@
 
 ## What's New
 
-**v2.2.0** - RAP OData E2E Support
+**v2.6.0** - RAP OData E2E Support
 - Create CDS views, Service Definitions, and Service Bindings
 - Publish OData V2/V4 services directly from AI assistant
 - Full RAP development lifecycle via MCP tools
@@ -342,7 +342,7 @@ vibing-steampunk/
 - [x] Short Dumps / Runtime Errors (RABAX) - GetDumps, GetDump
 - [x] ABAP Profiler / Traces (ATRA) - ListTraces, GetTrace
 - [x] SQL Trace (ST05) - GetSQLTraceState, ListSQLTraces
-- [x] **RAP OData E2E** - DDLS, SRVD, SRVB create + publish (v2.2.0)
+- [x] **RAP OData E2E** - DDLS, SRVD, SRVB create + publish (v2.6.0)
 
 ### In Progress
 - [ ] External Breakpoint Support (API research complete)
