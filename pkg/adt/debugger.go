@@ -764,3 +764,804 @@ func parseDebuggeeResponse(data []byte) (*Debuggee, error) {
 
 	return debuggee, nil
 }
+
+// --- Debug Session Types ---
+
+// DebugStepType represents the type of debug step operation.
+type DebugStepType string
+
+const (
+	DebugStepInto       DebugStepType = "stepInto"
+	DebugStepOver       DebugStepType = "stepOver"
+	DebugStepReturn     DebugStepType = "stepReturn"
+	DebugStepContinue   DebugStepType = "stepContinue"
+	DebugStepRunToLine  DebugStepType = "stepRunToLine"
+	DebugStepJumpToLine DebugStepType = "stepJumpToLine"
+	DebugTerminate      DebugStepType = "terminateDebuggee"
+)
+
+// DebugSettings contains debugger session settings.
+type DebugSettings struct {
+	SystemDebugging       bool `json:"systemDebugging"`
+	CreateExceptionObject bool `json:"createExceptionObject"`
+	BackgroundRFC         bool `json:"backgroundRFC"`
+	SharedObjectDebugging bool `json:"sharedObjectDebugging"`
+	ShowDataAging         bool `json:"showDataAging"`
+	UpdateDebugging       bool `json:"updateDebugging"`
+}
+
+// DebugAction represents an available debugger action.
+type DebugAction struct {
+	Name     string `json:"name"`
+	Style    string `json:"style"`
+	Group    string `json:"group"`
+	Title    string `json:"title"`
+	Link     string `json:"link"`
+	Value    string `json:"value"`
+	Disabled bool   `json:"disabled"`
+}
+
+// DebugReachedBreakpoint represents a breakpoint that was hit.
+type DebugReachedBreakpoint struct {
+	ID                              string `json:"id"`
+	Kind                            string `json:"kind"`
+	UnresolvableCondition           string `json:"unresolvableCondition,omitempty"`
+	UnresolvableConditionErrorOffset string `json:"unresolvableConditionErrorOffset,omitempty"`
+}
+
+// DebugState contains the current debug session state.
+type DebugState struct {
+	IsRFC                       bool           `json:"isRfc"`
+	IsSameSystem                bool           `json:"isSameSystem"`
+	ServerName                  string         `json:"serverName"`
+	DebugSessionID              string         `json:"debugSessionId"`
+	ProcessID                   int            `json:"processId"`
+	IsPostMortem                bool           `json:"isPostMortem"`
+	IsUserAuthorizedForChanges  bool           `json:"isUserAuthorizedForChanges"`
+	DebuggeeSessionID           string         `json:"debuggeeSessionId"`
+	AbapTraceState              string         `json:"abapTraceState"`
+	CanAdvancedTableFeatures    bool           `json:"canAdvancedTableFeatures"`
+	IsNonExclusive              bool           `json:"isNonExclusive"`
+	IsNonExclusiveToggled       bool           `json:"isNonExclusiveToggled"`
+	GuiEditorGuid               string         `json:"guiEditorGuid"`
+	SessionTitle                string         `json:"sessionTitle"`
+	IsSteppingPossible          bool           `json:"isSteppingPossible"`
+	IsTerminationPossible       bool           `json:"isTerminationPossible"`
+	Actions                     []DebugAction  `json:"actions,omitempty"`
+}
+
+// DebugAttachResult contains the result of attaching to a debuggee.
+type DebugAttachResult struct {
+	DebugState
+	ReachedBreakpoints []DebugReachedBreakpoint `json:"reachedBreakpoints,omitempty"`
+}
+
+// DebugStepResult contains the result of a step operation.
+type DebugStepResult struct {
+	DebugState
+	IsDebuggeeChanged  bool                     `json:"isDebuggeeChanged"`
+	Settings           DebugSettings            `json:"settings"`
+	ReachedBreakpoints []DebugReachedBreakpoint `json:"reachedBreakpoints,omitempty"`
+}
+
+// DebugStackEntry represents a single entry in the call stack.
+type DebugStackEntry struct {
+	StackPosition int    `json:"stackPosition"`
+	StackType     string `json:"stackType"`     // ABAP, DYNP, ENHANCEMENT
+	StackURI      string `json:"stackUri"`
+	ProgramName   string `json:"programName"`
+	IncludeName   string `json:"includeName"`
+	Line          int    `json:"line"`
+	EventType     string `json:"eventType"`
+	EventName     string `json:"eventName"`
+	SourceType    string `json:"sourceType"`    // ABAP, DYNP, ST
+	SystemProgram bool   `json:"systemProgram"`
+	IsVit         bool   `json:"isVit"`
+	URI           string `json:"uri"`
+}
+
+// DebugStackInfo contains the call stack information.
+type DebugStackInfo struct {
+	IsRFC                 bool              `json:"isRfc"`
+	IsSameSystem          bool              `json:"isSameSystem"`
+	ServerName            string            `json:"serverName"`
+	DebugCursorStackIndex int               `json:"debugCursorStackIndex,omitempty"`
+	Stack                 []DebugStackEntry `json:"stack"`
+}
+
+// DebugMetaType represents the metatype of a variable.
+type DebugMetaType string
+
+const (
+	DebugMetaTypeSimple     DebugMetaType = "simple"
+	DebugMetaTypeString     DebugMetaType = "string"
+	DebugMetaTypeStructure  DebugMetaType = "structure"
+	DebugMetaTypeTable      DebugMetaType = "table"
+	DebugMetaTypeDataRef    DebugMetaType = "dataref"
+	DebugMetaTypeObjectRef  DebugMetaType = "objectref"
+	DebugMetaTypeClass      DebugMetaType = "class"
+	DebugMetaTypeObject     DebugMetaType = "object"
+	DebugMetaTypeBoxRef     DebugMetaType = "boxref"
+	DebugMetaTypeBoxedComp  DebugMetaType = "boxedcomp"
+	DebugMetaTypeAnonymComp DebugMetaType = "anonymcomp"
+	DebugMetaTypeUnknown    DebugMetaType = "unknown"
+)
+
+// DebugVariable represents a variable in the debugger.
+type DebugVariable struct {
+	ID               string        `json:"id"`
+	Name             string        `json:"name"`
+	DeclaredTypeName string        `json:"declaredTypeName"`
+	ActualTypeName   string        `json:"actualTypeName"`
+	Kind             string        `json:"kind"`
+	InstantiationKind string       `json:"instantiationKind"`
+	AccessKind       string        `json:"accessKind"`
+	MetaType         DebugMetaType `json:"metaType"`
+	ParameterKind    string        `json:"parameterKind"`
+	Value            string        `json:"value"`
+	HexValue         string        `json:"hexValue,omitempty"`
+	ReadOnly         bool          `json:"readOnly"`
+	TechnicalType    string        `json:"technicalType"`
+	Length           int           `json:"length"`
+	TableBody        string        `json:"tableBody,omitempty"`
+	TableLines       int           `json:"tableLines,omitempty"`
+	IsValueIncomplete bool         `json:"isValueIncomplete"`
+	IsException      bool          `json:"isException"`
+	InheritanceLevel int           `json:"inheritanceLevel,omitempty"`
+	InheritanceClass string        `json:"inheritanceClass,omitempty"`
+}
+
+// DebugVariableHierarchy represents a parent-child relationship between variables.
+type DebugVariableHierarchy struct {
+	ParentID  string `json:"parentId"`
+	ChildID   string `json:"childId"`
+	ChildName string `json:"childName"`
+}
+
+// DebugChildVariablesInfo contains child variables and their hierarchy.
+type DebugChildVariablesInfo struct {
+	Hierarchies []DebugVariableHierarchy `json:"hierarchies"`
+	Variables   []DebugVariable          `json:"variables"`
+}
+
+// --- Debug Session API ---
+
+// DebuggerAttach attaches to a debuggee that has hit a breakpoint.
+// debuggeeId: The ID of the debuggee (from ListenResult.Debuggee.ID)
+// user: Optional user for user-mode debugging
+func (c *Client) DebuggerAttach(ctx context.Context, debuggeeID string, user string) (*DebugAttachResult, error) {
+	query := url.Values{}
+	query.Set("method", "attach")
+	query.Set("debuggeeId", debuggeeID)
+	query.Set("dynproDebugging", "true")
+	query.Set("debuggingMode", string(DebuggingModeUser))
+	if user != "" {
+		query.Set("requestUser", user)
+	}
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+		Method: http.MethodPost,
+		Accept: "application/xml",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("debugger attach failed: %w", err)
+	}
+
+	return parseAttachResponse(resp.Body)
+}
+
+// DebuggerDetach terminates the current debug session.
+// This releases the debuggee and ends the debugging session.
+func (c *Client) DebuggerDetach(ctx context.Context) error {
+	_, err := c.DebuggerStep(ctx, DebugTerminate, "")
+	return err
+}
+
+// DebuggerStep performs a step operation in the debugger.
+// stepType: One of stepInto, stepOver, stepReturn, stepContinue, stepRunToLine, stepJumpToLine, terminateDebuggee
+// uri: Required for stepRunToLine and stepJumpToLine (target line URI)
+func (c *Client) DebuggerStep(ctx context.Context, stepType DebugStepType, uri string) (*DebugStepResult, error) {
+	query := url.Values{}
+	query.Set("method", string(stepType))
+	if uri != "" {
+		query.Set("uri", uri)
+	}
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+		Method: http.MethodPost,
+		Accept: "application/xml",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("debugger step failed: %w", err)
+	}
+
+	return parseStepResponse(resp.Body)
+}
+
+// DebuggerGetStack retrieves the current call stack.
+// semanticURIs: If true, returns semantic URIs that can be used for navigation
+func (c *Client) DebuggerGetStack(ctx context.Context, semanticURIs bool) (*DebugStackInfo, error) {
+	query := url.Values{}
+	query.Set("method", "getStack")
+	query.Set("emode", "_")
+	if semanticURIs {
+		query.Set("semanticURIs", "true")
+	}
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/stack", &RequestOptions{
+		Method: http.MethodGet,
+		Accept: "application/xml",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("debugger get stack failed: %w", err)
+	}
+
+	return parseStackResponse(resp.Body)
+}
+
+// DebuggerGetVariables retrieves the values of specific variables.
+// variableIDs: List of variable IDs to retrieve (e.g., ["@ROOT", "@DATAAGING", "LV_COUNT"])
+func (c *Client) DebuggerGetVariables(ctx context.Context, variableIDs []string) ([]DebugVariable, error) {
+	if len(variableIDs) == 0 {
+		return nil, fmt.Errorf("at least one variable ID required")
+	}
+
+	// Build request body
+	var varElements []string
+	for _, id := range variableIDs {
+		varElements = append(varElements, fmt.Sprintf("<STPDA_ADT_VARIABLE><ID>%s</ID></STPDA_ADT_VARIABLE>", xmlEscape(id)))
+	}
+
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DATA>%s</DATA></asx:values></asx:abap>`,
+		strings.Join(varElements, ""))
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+		Method:      http.MethodPost,
+		ContentType: "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.Variables",
+		Accept:      "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.Variables",
+		Query:       url.Values{"method": []string{"getVariables"}},
+		Body:        []byte(body),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("debugger get variables failed: %w", err)
+	}
+
+	return parseVariablesResponse(resp.Body)
+}
+
+// DebuggerGetChildVariables retrieves child variables (for expanding structures/tables).
+// parentIDs: List of parent variable IDs (e.g., ["@ROOT", "@DATAAGING"] for top-level)
+func (c *Client) DebuggerGetChildVariables(ctx context.Context, parentIDs []string) (*DebugChildVariablesInfo, error) {
+	if len(parentIDs) == 0 {
+		parentIDs = []string{"@ROOT", "@DATAAGING"}
+	}
+
+	// Build request body
+	var hierElements []string
+	for _, id := range parentIDs {
+		hierElements = append(hierElements, fmt.Sprintf("<STPDA_ADT_VARIABLE_HIERARCHY><PARENT_ID>%s</PARENT_ID></STPDA_ADT_VARIABLE_HIERARCHY>", xmlEscape(id)))
+	}
+
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DATA><HIERARCHIES>%s</HIERARCHIES></DATA></asx:values></asx:abap>`,
+		strings.Join(hierElements, ""))
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+		Method:      http.MethodPost,
+		ContentType: "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.ChildVariables",
+		Accept:      "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.debugger.ChildVariables",
+		Query:       url.Values{"method": []string{"getChildVariables"}},
+		Body:        []byte(body),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("debugger get child variables failed: %w", err)
+	}
+
+	return parseChildVariablesResponse(resp.Body)
+}
+
+// DebuggerSetVariableValue modifies the value of a variable during debugging.
+// variableName: The name of the variable to modify
+// value: The new value as a string
+func (c *Client) DebuggerSetVariableValue(ctx context.Context, variableName, value string) (string, error) {
+	query := url.Values{}
+	query.Set("method", "setVariableValue")
+	query.Set("variableName", variableName)
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger", &RequestOptions{
+		Method: http.MethodPost,
+		Query:  query,
+		Body:   []byte(value),
+	})
+	if err != nil {
+		return "", fmt.Errorf("debugger set variable value failed: %w", err)
+	}
+
+	return string(resp.Body), nil
+}
+
+// DebuggerGoToStack navigates to a specific stack entry.
+// stackURI: The stack URI (e.g., "/sap/bc/adt/debugger/stack/type/ABAP/position/3")
+func (c *Client) DebuggerGoToStack(ctx context.Context, stackURI string) error {
+	_, err := c.transport.Request(ctx, stackURI, &RequestOptions{
+		Method: http.MethodPut,
+	})
+	if err != nil {
+		return fmt.Errorf("debugger go to stack failed: %w", err)
+	}
+	return nil
+}
+
+// --- Parse Functions ---
+
+func parseAttachResponse(data []byte) (*DebugAttachResult, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty attach response")
+	}
+
+	// Strip namespace prefixes
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "dbg:", "")
+
+	type xmlAction struct {
+		Name     string `xml:"name,attr"`
+		Style    string `xml:"style,attr"`
+		Group    string `xml:"group,attr"`
+		Title    string `xml:"title,attr"`
+		Link     string `xml:"link,attr"`
+		Value    string `xml:"value,attr"`
+		Disabled bool   `xml:"disabled,attr"`
+	}
+
+	type xmlBreakpoint struct {
+		ID                              string `xml:"id,attr"`
+		Kind                            string `xml:"kind,attr"`
+		UnresolvableCondition           string `xml:"unresolvableCondition,attr"`
+		UnresolvableConditionErrorOffset string `xml:"unresolvableConditionErrorOffset,attr"`
+	}
+
+	type xmlAttach struct {
+		XMLName                    xml.Name        `xml:"attach"`
+		IsRFC                      bool            `xml:"isRfc,attr"`
+		IsSameSystem               bool            `xml:"isSameSystem,attr"`
+		ServerName                 string          `xml:"serverName,attr"`
+		DebugSessionID             string          `xml:"debugSessionId,attr"`
+		ProcessID                  int             `xml:"processId,attr"`
+		IsPostMortem               bool            `xml:"isPostMortem,attr"`
+		IsUserAuthorizedForChanges bool            `xml:"isUserAuthorizedForChanges,attr"`
+		DebuggeeSessionID          string          `xml:"debuggeeSessionId,attr"`
+		AbapTraceState             string          `xml:"abapTraceState,attr"`
+		CanAdvancedTableFeatures   bool            `xml:"canAdvancedTableFeatures,attr"`
+		IsNonExclusive             bool            `xml:"isNonExclusive,attr"`
+		IsNonExclusiveToggled      bool            `xml:"isNonExclusiveToggled,attr"`
+		GuiEditorGuid              string          `xml:"guiEditorGuid,attr"`
+		SessionTitle               string          `xml:"sessionTitle,attr"`
+		IsSteppingPossible         bool            `xml:"isSteppingPossible,attr"`
+		IsTerminationPossible      bool            `xml:"isTerminationPossible,attr"`
+		Actions                    struct {
+			Action []xmlAction `xml:"action"`
+		} `xml:"actions"`
+		ReachedBreakpoints struct {
+			Breakpoint []xmlBreakpoint `xml:"breakpoint"`
+		} `xml:"reachedBreakpoints"`
+	}
+
+	var resp xmlAttach
+	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
+		return nil, fmt.Errorf("parsing attach response: %w", err)
+	}
+
+	result := &DebugAttachResult{
+		DebugState: DebugState{
+			IsRFC:                      resp.IsRFC,
+			IsSameSystem:               resp.IsSameSystem,
+			ServerName:                 resp.ServerName,
+			DebugSessionID:             resp.DebugSessionID,
+			ProcessID:                  resp.ProcessID,
+			IsPostMortem:               resp.IsPostMortem,
+			IsUserAuthorizedForChanges: resp.IsUserAuthorizedForChanges,
+			DebuggeeSessionID:          resp.DebuggeeSessionID,
+			AbapTraceState:             resp.AbapTraceState,
+			CanAdvancedTableFeatures:   resp.CanAdvancedTableFeatures,
+			IsNonExclusive:             resp.IsNonExclusive,
+			IsNonExclusiveToggled:      resp.IsNonExclusiveToggled,
+			GuiEditorGuid:              resp.GuiEditorGuid,
+			SessionTitle:               resp.SessionTitle,
+			IsSteppingPossible:         resp.IsSteppingPossible,
+			IsTerminationPossible:      resp.IsTerminationPossible,
+		},
+	}
+
+	// Parse actions
+	for _, a := range resp.Actions.Action {
+		result.Actions = append(result.Actions, DebugAction{
+			Name:     a.Name,
+			Style:    a.Style,
+			Group:    a.Group,
+			Title:    a.Title,
+			Link:     a.Link,
+			Value:    a.Value,
+			Disabled: a.Disabled,
+		})
+	}
+
+	// Parse reached breakpoints
+	for _, bp := range resp.ReachedBreakpoints.Breakpoint {
+		result.ReachedBreakpoints = append(result.ReachedBreakpoints, DebugReachedBreakpoint{
+			ID:                              bp.ID,
+			Kind:                            bp.Kind,
+			UnresolvableCondition:           bp.UnresolvableCondition,
+			UnresolvableConditionErrorOffset: bp.UnresolvableConditionErrorOffset,
+		})
+	}
+
+	return result, nil
+}
+
+func parseStepResponse(data []byte) (*DebugStepResult, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty step response")
+	}
+
+	// Strip namespace prefixes
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "dbg:", "")
+
+	type xmlAction struct {
+		Name     string `xml:"name,attr"`
+		Style    string `xml:"style,attr"`
+		Group    string `xml:"group,attr"`
+		Title    string `xml:"title,attr"`
+		Link     string `xml:"link,attr"`
+		Value    string `xml:"value,attr"`
+		Disabled bool   `xml:"disabled,attr"`
+	}
+
+	type xmlSettings struct {
+		SystemDebugging       bool `xml:"systemDebugging,attr"`
+		CreateExceptionObject bool `xml:"createExceptionObject,attr"`
+		BackgroundRFC         bool `xml:"backgroundRFC,attr"`
+		SharedObjectDebugging bool `xml:"sharedObjectDebugging,attr"`
+		ShowDataAging         bool `xml:"showDataAging,attr"`
+		UpdateDebugging       bool `xml:"updateDebugging,attr"`
+	}
+
+	type xmlBreakpoint struct {
+		ID   string `xml:"id,attr"`
+		Kind string `xml:"kind,attr"`
+	}
+
+	type xmlStep struct {
+		XMLName                    xml.Name     `xml:"step"`
+		IsRFC                      bool         `xml:"isRfc,attr"`
+		IsSameSystem               bool         `xml:"isSameSystem,attr"`
+		ServerName                 string       `xml:"serverName,attr"`
+		DebugSessionID             string       `xml:"debugSessionId,attr"`
+		ProcessID                  int          `xml:"processId,attr"`
+		IsPostMortem               bool         `xml:"isPostMortem,attr"`
+		IsUserAuthorizedForChanges bool         `xml:"isUserAuthorizedForChanges,attr"`
+		DebuggeeSessionID          string       `xml:"debuggeeSessionId,attr"`
+		AbapTraceState             string       `xml:"abapTraceState,attr"`
+		CanAdvancedTableFeatures   bool         `xml:"canAdvancedTableFeatures,attr"`
+		IsNonExclusive             bool         `xml:"isNonExclusive,attr"`
+		IsNonExclusiveToggled      bool         `xml:"isNonExclusiveToggled,attr"`
+		GuiEditorGuid              string       `xml:"guiEditorGuid,attr"`
+		SessionTitle               string       `xml:"sessionTitle,attr"`
+		IsSteppingPossible         bool         `xml:"isSteppingPossible,attr"`
+		IsTerminationPossible      bool         `xml:"isTerminationPossible,attr"`
+		IsDebuggeeChanged          bool         `xml:"isDebuggeeChanged,attr"`
+		Settings                   xmlSettings  `xml:"settings"`
+		Actions                    struct {
+			Action []xmlAction `xml:"action"`
+		} `xml:"actions"`
+		ReachedBreakpoints struct {
+			Breakpoint []xmlBreakpoint `xml:"breakpoint"`
+		} `xml:"reachedBreakpoints"`
+	}
+
+	var resp xmlStep
+	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
+		return nil, fmt.Errorf("parsing step response: %w", err)
+	}
+
+	result := &DebugStepResult{
+		DebugState: DebugState{
+			IsRFC:                      resp.IsRFC,
+			IsSameSystem:               resp.IsSameSystem,
+			ServerName:                 resp.ServerName,
+			DebugSessionID:             resp.DebugSessionID,
+			ProcessID:                  resp.ProcessID,
+			IsPostMortem:               resp.IsPostMortem,
+			IsUserAuthorizedForChanges: resp.IsUserAuthorizedForChanges,
+			DebuggeeSessionID:          resp.DebuggeeSessionID,
+			AbapTraceState:             resp.AbapTraceState,
+			CanAdvancedTableFeatures:   resp.CanAdvancedTableFeatures,
+			IsNonExclusive:             resp.IsNonExclusive,
+			IsNonExclusiveToggled:      resp.IsNonExclusiveToggled,
+			GuiEditorGuid:              resp.GuiEditorGuid,
+			SessionTitle:               resp.SessionTitle,
+			IsSteppingPossible:         resp.IsSteppingPossible,
+			IsTerminationPossible:      resp.IsTerminationPossible,
+		},
+		IsDebuggeeChanged: resp.IsDebuggeeChanged,
+		Settings: DebugSettings{
+			SystemDebugging:       resp.Settings.SystemDebugging,
+			CreateExceptionObject: resp.Settings.CreateExceptionObject,
+			BackgroundRFC:         resp.Settings.BackgroundRFC,
+			SharedObjectDebugging: resp.Settings.SharedObjectDebugging,
+			ShowDataAging:         resp.Settings.ShowDataAging,
+			UpdateDebugging:       resp.Settings.UpdateDebugging,
+		},
+	}
+
+	// Parse actions
+	for _, a := range resp.Actions.Action {
+		result.Actions = append(result.Actions, DebugAction{
+			Name:     a.Name,
+			Style:    a.Style,
+			Group:    a.Group,
+			Title:    a.Title,
+			Link:     a.Link,
+			Value:    a.Value,
+			Disabled: a.Disabled,
+		})
+	}
+
+	// Parse reached breakpoints
+	for _, bp := range resp.ReachedBreakpoints.Breakpoint {
+		result.ReachedBreakpoints = append(result.ReachedBreakpoints, DebugReachedBreakpoint{
+			ID:   bp.ID,
+			Kind: bp.Kind,
+		})
+	}
+
+	return result, nil
+}
+
+func parseStackResponse(data []byte) (*DebugStackInfo, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty stack response")
+	}
+
+	// Strip namespace prefixes
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "dbg:", "")
+
+	type xmlStackEntry struct {
+		StackPosition int    `xml:"stackPosition,attr"`
+		StackType     string `xml:"stackType,attr"`
+		StackURI      string `xml:"stackUri,attr"`
+		ProgramName   string `xml:"programName,attr"`
+		IncludeName   string `xml:"includeName,attr"`
+		Line          int    `xml:"line,attr"`
+		EventType     string `xml:"eventType,attr"`
+		EventName     string `xml:"eventName,attr"`
+		SourceType    string `xml:"sourceType,attr"`
+		SystemProgram bool   `xml:"systemProgram,attr"`
+		IsVit         bool   `xml:"isVit,attr"`
+		URI           string `xml:"uri,attr"`
+	}
+
+	type xmlStack struct {
+		XMLName               xml.Name        `xml:"stack"`
+		IsRFC                 bool            `xml:"isRfc,attr"`
+		IsSameSystem          bool            `xml:"isSameSystem,attr"`
+		ServerName            string          `xml:"serverName,attr"`
+		DebugCursorStackIndex int             `xml:"debugCursorStackIndex,attr"`
+		StackEntry            []xmlStackEntry `xml:"stackEntry"`
+	}
+
+	var resp xmlStack
+	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
+		return nil, fmt.Errorf("parsing stack response: %w", err)
+	}
+
+	result := &DebugStackInfo{
+		IsRFC:                 resp.IsRFC,
+		IsSameSystem:          resp.IsSameSystem,
+		ServerName:            resp.ServerName,
+		DebugCursorStackIndex: resp.DebugCursorStackIndex,
+	}
+
+	for _, e := range resp.StackEntry {
+		result.Stack = append(result.Stack, DebugStackEntry{
+			StackPosition: e.StackPosition,
+			StackType:     e.StackType,
+			StackURI:      e.StackURI,
+			ProgramName:   e.ProgramName,
+			IncludeName:   e.IncludeName,
+			Line:          e.Line,
+			EventType:     e.EventType,
+			EventName:     e.EventName,
+			SourceType:    e.SourceType,
+			SystemProgram: e.SystemProgram,
+			IsVit:         e.IsVit,
+			URI:           e.URI,
+		})
+	}
+
+	return result, nil
+}
+
+func parseVariablesResponse(data []byte) ([]DebugVariable, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	// Strip namespace prefixes
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "asx:", "")
+
+	type xmlVariable struct {
+		ID                string `xml:"ID"`
+		Name              string `xml:"NAME"`
+		DeclaredTypeName  string `xml:"DECLARED_TYPE_NAME"`
+		ActualTypeName    string `xml:"ACTUAL_TYPE_NAME"`
+		Kind              string `xml:"KIND"`
+		InstantiationKind string `xml:"INSTANTIATION_KIND"`
+		AccessKind        string `xml:"ACCESS_KIND"`
+		MetaType          string `xml:"META_TYPE"`
+		ParameterKind     string `xml:"PARAMETER_KIND"`
+		Value             string `xml:"VALUE"`
+		HexValue          string `xml:"HEX_VALUE"`
+		ReadOnly          string `xml:"READ_ONLY"`
+		TechnicalType     string `xml:"TECHNICAL_TYPE"`
+		Length            int    `xml:"LENGTH"`
+		TableBody         string `xml:"TABLE_BODY"`
+		TableLines        int    `xml:"TABLE_LINES"`
+		IsValueIncomplete string `xml:"IS_VALUE_INCOMPLETE"`
+		IsException       string `xml:"IS_EXCEPTION"`
+		InheritanceLevel  int    `xml:"INHERITANCE_LEVEL"`
+		InheritanceClass  string `xml:"INHERITANCE_CLASS"`
+	}
+
+	type xmlAbap struct {
+		XMLName xml.Name `xml:"abap"`
+		Values  struct {
+			Data struct {
+				Variables []xmlVariable `xml:"STPDA_ADT_VARIABLE"`
+			} `xml:"DATA"`
+		} `xml:"values"`
+	}
+
+	var resp xmlAbap
+	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
+		return nil, fmt.Errorf("parsing variables response: %w", err)
+	}
+
+	var result []DebugVariable
+	for _, v := range resp.Values.Data.Variables {
+		result = append(result, DebugVariable{
+			ID:                v.ID,
+			Name:              v.Name,
+			DeclaredTypeName:  v.DeclaredTypeName,
+			ActualTypeName:    v.ActualTypeName,
+			Kind:              v.Kind,
+			InstantiationKind: v.InstantiationKind,
+			AccessKind:        v.AccessKind,
+			MetaType:          DebugMetaType(v.MetaType),
+			ParameterKind:     v.ParameterKind,
+			Value:             v.Value,
+			HexValue:          v.HexValue,
+			ReadOnly:          v.ReadOnly == "X",
+			TechnicalType:     v.TechnicalType,
+			Length:            v.Length,
+			TableBody:         v.TableBody,
+			TableLines:        v.TableLines,
+			IsValueIncomplete: v.IsValueIncomplete == "X",
+			IsException:       v.IsException == "X",
+			InheritanceLevel:  v.InheritanceLevel,
+			InheritanceClass:  v.InheritanceClass,
+		})
+	}
+
+	return result, nil
+}
+
+func parseChildVariablesResponse(data []byte) (*DebugChildVariablesInfo, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	// Strip namespace prefixes
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "asx:", "")
+
+	type xmlHierarchy struct {
+		ParentID  string `xml:"PARENT_ID"`
+		ChildID   string `xml:"CHILD_ID"`
+		ChildName string `xml:"CHILD_NAME"`
+	}
+
+	type xmlVariable struct {
+		ID                string `xml:"ID"`
+		Name              string `xml:"NAME"`
+		DeclaredTypeName  string `xml:"DECLARED_TYPE_NAME"`
+		ActualTypeName    string `xml:"ACTUAL_TYPE_NAME"`
+		Kind              string `xml:"KIND"`
+		InstantiationKind string `xml:"INSTANTIATION_KIND"`
+		AccessKind        string `xml:"ACCESS_KIND"`
+		MetaType          string `xml:"META_TYPE"`
+		ParameterKind     string `xml:"PARAMETER_KIND"`
+		Value             string `xml:"VALUE"`
+		HexValue          string `xml:"HEX_VALUE"`
+		ReadOnly          string `xml:"READ_ONLY"`
+		TechnicalType     string `xml:"TECHNICAL_TYPE"`
+		Length            int    `xml:"LENGTH"`
+		TableBody         string `xml:"TABLE_BODY"`
+		TableLines        int    `xml:"TABLE_LINES"`
+		IsValueIncomplete string `xml:"IS_VALUE_INCOMPLETE"`
+		IsException       string `xml:"IS_EXCEPTION"`
+		InheritanceLevel  int    `xml:"INHERITANCE_LEVEL"`
+		InheritanceClass  string `xml:"INHERITANCE_CLASS"`
+	}
+
+	type xmlAbap struct {
+		XMLName xml.Name `xml:"abap"`
+		Values  struct {
+			Data struct {
+				Hierarchies struct {
+					Hierarchy []xmlHierarchy `xml:"STPDA_ADT_VARIABLE_HIERARCHY"`
+				} `xml:"HIERARCHIES"`
+				Variables struct {
+					Variable []xmlVariable `xml:"STPDA_ADT_VARIABLE"`
+				} `xml:"VARIABLES"`
+			} `xml:"DATA"`
+		} `xml:"values"`
+	}
+
+	var resp xmlAbap
+	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
+		return nil, fmt.Errorf("parsing child variables response: %w", err)
+	}
+
+	result := &DebugChildVariablesInfo{}
+
+	for _, h := range resp.Values.Data.Hierarchies.Hierarchy {
+		result.Hierarchies = append(result.Hierarchies, DebugVariableHierarchy{
+			ParentID:  h.ParentID,
+			ChildID:   h.ChildID,
+			ChildName: h.ChildName,
+		})
+	}
+
+	for _, v := range resp.Values.Data.Variables.Variable {
+		result.Variables = append(result.Variables, DebugVariable{
+			ID:                v.ID,
+			Name:              v.Name,
+			DeclaredTypeName:  v.DeclaredTypeName,
+			ActualTypeName:    v.ActualTypeName,
+			Kind:              v.Kind,
+			InstantiationKind: v.InstantiationKind,
+			AccessKind:        v.AccessKind,
+			MetaType:          DebugMetaType(v.MetaType),
+			ParameterKind:     v.ParameterKind,
+			Value:             v.Value,
+			HexValue:          v.HexValue,
+			ReadOnly:          v.ReadOnly == "X",
+			TechnicalType:     v.TechnicalType,
+			Length:            v.Length,
+			TableBody:         v.TableBody,
+			TableLines:        v.TableLines,
+			IsValueIncomplete: v.IsValueIncomplete == "X",
+			IsException:       v.IsException == "X",
+			InheritanceLevel:  v.InheritanceLevel,
+			InheritanceClass:  v.InheritanceClass,
+		})
+	}
+
+	return result, nil
+}
+
+// IsComplexType returns true if the variable has a complex type that can be expanded.
+func (v *DebugVariable) IsComplexType() bool {
+	switch v.MetaType {
+	case DebugMetaTypeStructure, DebugMetaTypeTable, DebugMetaTypeDataRef,
+		DebugMetaTypeObjectRef, DebugMetaTypeClass, DebugMetaTypeObject, DebugMetaTypeBoxRef:
+		return true
+	default:
+		return false
+	}
+}

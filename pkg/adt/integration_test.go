@@ -1813,3 +1813,86 @@ func TestIntegration_DebuggerListener(t *testing.T) {
 
 	t.Log("Debug listener test completed!")
 }
+
+// TestIntegration_DebugSessionAPIs tests the debug session APIs without a live debuggee.
+// This test verifies the API structure and error handling.
+// For a full debug session test, see the manual test workflow below.
+//
+// Manual Debug Session Test Workflow:
+// 1. Set breakpoint: Use SetExternalBreakpoint on a test program
+// 2. Run code: Execute the test program from SAP GUI or another session
+// 3. Listen: Call DebuggerListen - should catch the debuggee
+// 4. Attach: Call DebuggerAttach with the debuggee ID
+// 5. Inspect: Call DebuggerGetStack and DebuggerGetVariables
+// 6. Step: Call DebuggerStep with DebugStepOver/Into/Return
+// 7. Detach: Call DebuggerDetach to release the debuggee
+func TestIntegration_DebugSessionAPIs(t *testing.T) {
+	client := getIntegrationClient(t)
+	ctx := context.Background()
+
+	testUser := os.Getenv("SAP_USER")
+	if testUser == "" {
+		testUser = "AVINOGRADOVA"
+	}
+
+	t.Logf("Testing debug session APIs for user: %s", testUser)
+
+	// Step 1: Test DebuggerAttach with invalid debuggee ID
+	// This tests the API is reachable and returns proper error
+	t.Log("Step 1: Testing DebuggerAttach with invalid debuggee...")
+	_, err := client.DebuggerAttach(ctx, "invalid-debuggee-id", testUser)
+	if err == nil {
+		t.Error("Expected error for invalid debuggee ID")
+	} else {
+		t.Logf("DebuggerAttach correctly returned error: %v", err)
+	}
+
+	// Step 2: Test DebuggerGetStack without active session
+	// Should return error as no debug session is active
+	t.Log("Step 2: Testing DebuggerGetStack without session...")
+	_, err = client.DebuggerGetStack(ctx, true)
+	if err == nil {
+		t.Error("Expected error for GetStack without session")
+	} else {
+		t.Logf("DebuggerGetStack correctly returned error: %v", err)
+	}
+
+	// Step 3: Test DebuggerGetVariables without active session
+	t.Log("Step 3: Testing DebuggerGetVariables without session...")
+	_, err = client.DebuggerGetVariables(ctx, []string{"@ROOT"})
+	if err == nil {
+		t.Error("Expected error for GetVariables without session")
+	} else {
+		t.Logf("DebuggerGetVariables correctly returned error: %v", err)
+	}
+
+	// Step 4: Test DebuggerGetChildVariables without active session
+	t.Log("Step 4: Testing DebuggerGetChildVariables without session...")
+	_, err = client.DebuggerGetChildVariables(ctx, []string{"@ROOT"})
+	if err == nil {
+		t.Error("Expected error for GetChildVariables without session")
+	} else {
+		t.Logf("DebuggerGetChildVariables correctly returned error: %v", err)
+	}
+
+	// Step 5: Test DebuggerStep without active session
+	t.Log("Step 5: Testing DebuggerStep without session...")
+	_, err = client.DebuggerStep(ctx, DebugStepOver, "")
+	if err == nil {
+		t.Error("Expected error for Step without session")
+	} else {
+		t.Logf("DebuggerStep correctly returned error: %v", err)
+	}
+
+	t.Log("Debug session API test completed!")
+	t.Log("")
+	t.Log("=== To test a full debug session manually ===")
+	t.Log("1. Set a breakpoint: client.SetExternalBreakpoint(...)")
+	t.Log("2. Run code that hits the breakpoint from another session")
+	t.Log("3. Call client.DebuggerListen to catch the debuggee")
+	t.Log("4. Attach: client.DebuggerAttach(debuggee.ID, user)")
+	t.Log("5. Get stack: client.DebuggerGetStack(true)")
+	t.Log("6. Get variables: client.DebuggerGetChildVariables([]string{\"@ROOT\"})")
+	t.Log("7. Step: client.DebuggerStep(DebugStepOver, \"\")")
+	t.Log("8. Detach: client.DebuggerDetach()")
+}

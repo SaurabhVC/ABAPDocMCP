@@ -3,11 +3,17 @@
 
 ## What's New
 
+**v2.8.0** - Full Debug Session Support
+- **DebuggerAttach/Detach** - Attach to caught debuggees, release sessions
+- **DebuggerGetStack** - View call stack with program/line info
+- **DebuggerGetVariables** - Inspect variable values during debugging
+- **DebuggerStep** - Step into/over/return/continue through code
+- Complete AI-powered debugging: breakpoint → listen → attach → inspect → step
+
 **v2.7.0** - External Debugger & Listener
 - Set external breakpoints (line, exception, statement, message)
 - Long-polling debug listener for autonomous debugging
 - Foundation for AI-powered debugger scripting
-- Vision: automated root cause analysis via debug scripts
 
 **v2.6.0** - RAP OData E2E Support
 - Create CDS views, Service Definitions, and Service Bindings
@@ -20,15 +26,15 @@
 
 A Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT).
 
-**Single binary** with **31 focused tools** (default) or **68 expert tools** for AI-assisted ABAP development.
+**Single binary** with **37 focused tools** (default) or **74 expert tools** for AI-assisted ABAP development.
 
 ## Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **External Debugger** | Breakpoints, debug listener, foundation for AI debugger scripting |
+| **AI Debugger** | Breakpoints, listener, attach, step, inspect stack & variables |
 | **RAP OData E2E** | Create CDS views, Service Definitions, Bindings → Publish OData services |
-| **Focused Mode** | 31 curated tools optimized for AI assistants (58% token reduction) |
+| **Focused Mode** | 37 curated tools optimized for AI assistants (50% token reduction) |
 | **AI-Powered RCA** | Root cause analysis with dumps, traces, profiler + code intelligence |
 | **DSL & Workflows** | Fluent Go API + YAML automation for CI/CD pipelines |
 | **ExecuteABAP** | Run arbitrary ABAP code via unit test wrapper |
@@ -132,8 +138,8 @@ Add `.mcp.json` to your project:
 
 | Aspect | Focused (Default) | Expert |
 |--------|-------------------|--------|
-| **Tools** | 31 essential | 68 complete |
-| **Token overhead** | ~2,000 | ~6,500 |
+| **Tools** | 37 essential | 74 complete |
+| **Token overhead** | ~2,500 | ~7,500 |
 | **Use case** | Daily development | Edge cases, debugging |
 | **Unified tools** | GetSource, WriteSource | + granular Get*/Write* |
 
@@ -224,9 +230,10 @@ See [AI-Powered RCA Workflows](reports/2025-12-05-013-ai-powered-rca-workflows.m
 
 ## Tools Reference
 
-**31 Focused Mode Tools:**
+**37 Focused Mode Tools:**
 - **Search:** SearchObject, GrepObjects, GrepPackages
 - **Read:** GetSource, GetTable, GetTableContents, RunQuery, GetPackage, GetFunctionGroup, GetCDSDependencies
+- **Debugger:** SetExternalBreakpoint, GetExternalBreakpoints, DeleteExternalBreakpoint, DebuggerListen, DebuggerAttach, DebuggerDetach, DebuggerStep, DebuggerGetStack, DebuggerGetVariables
 - **Write:** WriteSource, EditSource, ImportFromFile, ExportToFile
 - **Dev:** SyntaxCheck, RunUnitTests, RunATCCheck, LockObject, UnlockObject
 - **Intelligence:** FindDefinition, FindReferences
@@ -332,8 +339,8 @@ vibing-steampunk/
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 68 (31 focused, 68 expert) |
-| **Unit Tests** | 249 |
+| **Tools** | 74 (37 focused, 74 expert) |
+| **Unit Tests** | 161 |
 | **Platforms** | 9 (Linux, macOS, Windows × amd64/arm64/386) |
 
 <details>
@@ -350,14 +357,12 @@ vibing-steampunk/
 - [x] ABAP Profiler / Traces (ATRA) - ListTraces, GetTrace
 - [x] SQL Trace (ST05) - GetSQLTraceState, ListSQLTraces
 - [x] **RAP OData E2E** - DDLS, SRVD, SRVB create + publish (v2.6.0)
-
-### In Progress
-- [ ] External Breakpoint Support (API research complete)
+- [x] **External Breakpoints** - Set/get/delete line, exception, statement, message breakpoints (v2.7.0)
+- [x] **Debug Session** - Listener, attach, detach, step, stack, variables (v2.8.0)
 
 ### Planned
 - [ ] Transport Management
 - [ ] API Release State (ARS)
-- [ ] Interactive Debugging
 
 **Research Reports:**
 - [Native ADT Features](reports/2025-12-05-005-native-adt-features-deep-dive.md) - Comprehensive ADT capability analysis

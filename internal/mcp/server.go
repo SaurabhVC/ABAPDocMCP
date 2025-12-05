@@ -178,6 +178,14 @@ func (s *Server) registerTools(mode string) {
 		"SetExternalBreakpoint":    true, // Set external breakpoint
 		"GetExternalBreakpoints":   true, // Get external breakpoints
 		"DeleteExternalBreakpoint": true, // Delete external breakpoint
+
+		// Debugger Session (6)
+		"DebuggerListen":       true, // Wait for debuggee to hit breakpoint
+		"DebuggerAttach":       true, // Attach to debuggee
+		"DebuggerDetach":       true, // Detach from debug session
+		"DebuggerStep":         true, // Step through code
+		"DebuggerGetStack":     true, // Get call stack
+		"DebuggerGetVariables": true, // Get variable values
 	}
 
 	// Helper to check if tool should be registered
@@ -596,6 +604,73 @@ func (s *Server) registerTools(mode string) {
 				mcp.Description("User who owns the breakpoint (defaults to current user)"),
 			),
 		), s.handleDeleteExternalBreakpoint)
+	}
+
+	// --- Debugger Session ---
+
+	// DebuggerListen
+	if shouldRegister("DebuggerListen") {
+		s.mcpServer.AddTool(mcp.NewTool("DebuggerListen",
+			mcp.WithDescription("Start a debug listener that waits for a debuggee to hit a breakpoint. This is a BLOCKING call that uses long-polling. Returns when a debuggee is caught, timeout occurs, or a conflict is detected."),
+			mcp.WithString("user",
+				mcp.Description("User to listen for (defaults to current user)"),
+			),
+			mcp.WithNumber("timeout",
+				mcp.Description("Timeout in seconds (default: 60, max: 240)"),
+			),
+		), s.handleDebuggerListen)
+	}
+
+	// DebuggerAttach
+	if shouldRegister("DebuggerAttach") {
+		s.mcpServer.AddTool(mcp.NewTool("DebuggerAttach",
+			mcp.WithDescription("Attach to a debuggee that has hit a breakpoint. Use the debuggee_id from DebuggerListen result."),
+			mcp.WithString("debuggee_id",
+				mcp.Required(),
+				mcp.Description("ID of the debuggee (from DebuggerListen result)"),
+			),
+			mcp.WithString("user",
+				mcp.Description("User for debugging (defaults to current user)"),
+			),
+		), s.handleDebuggerAttach)
+	}
+
+	// DebuggerDetach
+	if shouldRegister("DebuggerDetach") {
+		s.mcpServer.AddTool(mcp.NewTool("DebuggerDetach",
+			mcp.WithDescription("Detach from the current debug session and release the debuggee."),
+		), s.handleDebuggerDetach)
+	}
+
+	// DebuggerStep
+	if shouldRegister("DebuggerStep") {
+		s.mcpServer.AddTool(mcp.NewTool("DebuggerStep",
+			mcp.WithDescription("Perform a step operation in the debugger."),
+			mcp.WithString("step_type",
+				mcp.Required(),
+				mcp.Description("Step type: 'stepInto', 'stepOver', 'stepReturn', 'stepContinue', 'stepRunToLine', 'stepJumpToLine'"),
+			),
+			mcp.WithString("uri",
+				mcp.Description("Target URI for stepRunToLine/stepJumpToLine (e.g., '/sap/bc/adt/programs/programs/ZTEST/source/main#start=42')"),
+			),
+		), s.handleDebuggerStep)
+	}
+
+	// DebuggerGetStack
+	if shouldRegister("DebuggerGetStack") {
+		s.mcpServer.AddTool(mcp.NewTool("DebuggerGetStack",
+			mcp.WithDescription("Get the current call stack during a debug session."),
+		), s.handleDebuggerGetStack)
+	}
+
+	// DebuggerGetVariables
+	if shouldRegister("DebuggerGetVariables") {
+		s.mcpServer.AddTool(mcp.NewTool("DebuggerGetVariables",
+			mcp.WithDescription("Get variable values during a debug session. Use '@ROOT' to get top-level variables, or specific variable IDs to get their values."),
+			mcp.WithArray("variable_ids",
+				mcp.Description("Variable IDs to retrieve (e.g., ['@ROOT'] for top-level, or specific IDs like ['LV_COUNT', 'LS_DATA'])"),
+			),
+		), s.handleDebuggerGetVariables)
 	}
 
 	// SearchObject
@@ -3723,4 +3798,245 @@ func (s *Server) handleDeleteExternalBreakpoint(ctx context.Context, request mcp
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Breakpoint %s deleted successfully.", breakpointID)), nil
+}
+
+// --- Debugger Session Handlers ---
+
+func (s *Server) handleDebuggerListen(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	user, _ := request.Params.Arguments["user"].(string)
+	timeout := 60 // default
+	if t, ok := request.Params.Arguments["timeout"].(float64); ok && t > 0 {
+		timeout = int(t)
+		if timeout > 240 {
+			timeout = 240 // max 240 seconds
+		}
+	}
+
+	result, err := s.adtClient.DebuggerListen(ctx, &adt.ListenOptions{
+		DebuggingMode:  adt.DebuggingModeUser,
+		User:           user,
+		TimeoutSeconds: timeout,
+	})
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("DebuggerListen failed: %v", err)), nil
+	}
+
+	if result.TimedOut {
+		return mcp.NewToolResultText("Listener timed out - no debuggee hit a breakpoint within the timeout period."), nil
+	}
+
+	if result.Conflict != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("Listener conflict detected: %s (user: %s)",
+			result.Conflict.ConflictText, result.Conflict.IdeUser)), nil
+	}
+
+	if result.Debuggee != nil {
+		var sb strings.Builder
+		sb.WriteString("Debuggee caught!\n\n")
+		sb.WriteString(fmt.Sprintf("Debuggee ID: %s\n", result.Debuggee.ID))
+		sb.WriteString(fmt.Sprintf("User: %s\n", result.Debuggee.User))
+		sb.WriteString(fmt.Sprintf("Program: %s\n", result.Debuggee.Program))
+		sb.WriteString(fmt.Sprintf("Include: %s\n", result.Debuggee.Include))
+		sb.WriteString(fmt.Sprintf("Line: %d\n", result.Debuggee.Line))
+		sb.WriteString(fmt.Sprintf("Kind: %s\n", result.Debuggee.Kind))
+		sb.WriteString(fmt.Sprintf("Attachable: %v\n", result.Debuggee.IsAttachable))
+		sb.WriteString(fmt.Sprintf("App Server: %s\n", result.Debuggee.AppServer))
+		sb.WriteString("\nUse DebuggerAttach with the debuggee_id to attach to this session.")
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+
+	return mcp.NewToolResultText("Listener returned with no result."), nil
+}
+
+func (s *Server) handleDebuggerAttach(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	debuggeeID, ok := request.Params.Arguments["debuggee_id"].(string)
+	if !ok || debuggeeID == "" {
+		return newToolResultError("debuggee_id is required"), nil
+	}
+
+	user, _ := request.Params.Arguments["user"].(string)
+
+	result, err := s.adtClient.DebuggerAttach(ctx, debuggeeID, user)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("DebuggerAttach failed: %v", err)), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Successfully attached to debuggee!\n\n")
+	sb.WriteString(fmt.Sprintf("Debug Session ID: %s\n", result.DebugSessionID))
+	sb.WriteString(fmt.Sprintf("Process ID: %d\n", result.ProcessID))
+	sb.WriteString(fmt.Sprintf("Server: %s\n", result.ServerName))
+	sb.WriteString(fmt.Sprintf("Stepping Possible: %v\n", result.IsSteppingPossible))
+	sb.WriteString(fmt.Sprintf("Termination Possible: %v\n", result.IsTerminationPossible))
+
+	if len(result.ReachedBreakpoints) > 0 {
+		sb.WriteString("\nReached Breakpoints:\n")
+		for _, bp := range result.ReachedBreakpoints {
+			sb.WriteString(fmt.Sprintf("  - ID: %s (kind: %s)\n", bp.ID, bp.Kind))
+		}
+	}
+
+	if len(result.Actions) > 0 {
+		sb.WriteString("\nAvailable Actions:\n")
+		for _, action := range result.Actions {
+			sb.WriteString(fmt.Sprintf("  - %s: %s\n", action.Name, action.Title))
+		}
+	}
+
+	sb.WriteString("\nUse DebuggerGetStack to see the call stack, DebuggerGetVariables to inspect variables.")
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+func (s *Server) handleDebuggerDetach(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	err := s.adtClient.DebuggerDetach(ctx)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("DebuggerDetach failed: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText("Successfully detached from debug session."), nil
+}
+
+func (s *Server) handleDebuggerStep(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	stepTypeStr, ok := request.Params.Arguments["step_type"].(string)
+	if !ok || stepTypeStr == "" {
+		return newToolResultError("step_type is required"), nil
+	}
+
+	// Map string to step type
+	var stepType adt.DebugStepType
+	switch stepTypeStr {
+	case "stepInto":
+		stepType = adt.DebugStepInto
+	case "stepOver":
+		stepType = adt.DebugStepOver
+	case "stepReturn":
+		stepType = adt.DebugStepReturn
+	case "stepContinue":
+		stepType = adt.DebugStepContinue
+	case "stepRunToLine":
+		stepType = adt.DebugStepRunToLine
+	case "stepJumpToLine":
+		stepType = adt.DebugStepJumpToLine
+	default:
+		return newToolResultError(fmt.Sprintf("Invalid step_type: %s. Valid values: stepInto, stepOver, stepReturn, stepContinue, stepRunToLine, stepJumpToLine", stepTypeStr)), nil
+	}
+
+	uri, _ := request.Params.Arguments["uri"].(string)
+
+	result, err := s.adtClient.DebuggerStep(ctx, stepType, uri)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("DebuggerStep failed: %v", err)), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Step '%s' executed.\n\n", stepTypeStr))
+	sb.WriteString(fmt.Sprintf("Session: %s\n", result.DebugSessionID))
+	sb.WriteString(fmt.Sprintf("Debuggee Changed: %v\n", result.IsDebuggeeChanged))
+	sb.WriteString(fmt.Sprintf("Stepping Possible: %v\n", result.IsSteppingPossible))
+
+	if len(result.ReachedBreakpoints) > 0 {
+		sb.WriteString("\nReached Breakpoints:\n")
+		for _, bp := range result.ReachedBreakpoints {
+			sb.WriteString(fmt.Sprintf("  - ID: %s (kind: %s)\n", bp.ID, bp.Kind))
+		}
+	}
+
+	sb.WriteString("\nUse DebuggerGetStack to see current position, DebuggerGetVariables to inspect variables.")
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+func (s *Server) handleDebuggerGetStack(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	result, err := s.adtClient.DebuggerGetStack(ctx, true)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("DebuggerGetStack failed: %v", err)), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Call Stack:\n\n")
+	sb.WriteString(fmt.Sprintf("Server: %s\n", result.ServerName))
+	sb.WriteString(fmt.Sprintf("Current Stack Index: %d\n\n", result.DebugCursorStackIndex))
+
+	for i, entry := range result.Stack {
+		marker := "  "
+		if entry.StackPosition == result.DebugCursorStackIndex {
+			marker = "→ "
+		}
+		sb.WriteString(fmt.Sprintf("%s[%d] %s::%s (line %d)\n",
+			marker, entry.StackPosition, entry.ProgramName, entry.EventName, entry.Line))
+		sb.WriteString(fmt.Sprintf("      Type: %s, Include: %s\n", entry.EventType, entry.IncludeName))
+		if entry.SystemProgram {
+			sb.WriteString("      (system program)\n")
+		}
+		if i < len(result.Stack)-1 {
+			sb.WriteString("\n")
+		}
+	}
+
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+func (s *Server) handleDebuggerGetVariables(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Parse variable_ids from request
+	var variableIDs []string
+
+	if ids, ok := request.Params.Arguments["variable_ids"].([]interface{}); ok {
+		for _, id := range ids {
+			if s, ok := id.(string); ok {
+				variableIDs = append(variableIDs, s)
+			}
+		}
+	}
+
+	// Default to @ROOT if no IDs specified
+	if len(variableIDs) == 0 {
+		variableIDs = []string{"@ROOT"}
+	}
+
+	// If @ROOT is requested, use GetChildVariables for top-level vars
+	if len(variableIDs) == 1 && variableIDs[0] == "@ROOT" {
+		result, err := s.adtClient.DebuggerGetChildVariables(ctx, []string{"@ROOT", "@DATAAGING"})
+		if err != nil {
+			return newToolResultError(fmt.Sprintf("DebuggerGetVariables failed: %v", err)), nil
+		}
+
+		var sb strings.Builder
+		sb.WriteString("Variables:\n\n")
+
+		for _, v := range result.Variables {
+			sb.WriteString(fmt.Sprintf("%s: %s = %s\n", v.Name, v.DeclaredTypeName, v.Value))
+			sb.WriteString(fmt.Sprintf("  MetaType: %s, Kind: %s\n", v.MetaType, v.Kind))
+			if v.IsComplexType() {
+				sb.WriteString(fmt.Sprintf("  (complex type - use variable ID '%s' to expand)\n", v.ID))
+			}
+		}
+
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+
+	// Get specific variables
+	result, err := s.adtClient.DebuggerGetVariables(ctx, variableIDs)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("DebuggerGetVariables failed: %v", err)), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Variables:\n\n")
+
+	for _, v := range result {
+		sb.WriteString(fmt.Sprintf("%s: %s = %s\n", v.Name, v.DeclaredTypeName, v.Value))
+		sb.WriteString(fmt.Sprintf("  ID: %s\n", v.ID))
+		sb.WriteString(fmt.Sprintf("  MetaType: %s, Kind: %s\n", v.MetaType, v.Kind))
+		if v.HexValue != "" {
+			sb.WriteString(fmt.Sprintf("  Hex: %s\n", v.HexValue))
+		}
+		if v.TableLines > 0 {
+			sb.WriteString(fmt.Sprintf("  Table Lines: %d\n", v.TableLines))
+		}
+		if v.IsComplexType() {
+			sb.WriteString("  (complex type - expandable)\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	return mcp.NewToolResultText(sb.String()), nil
 }
