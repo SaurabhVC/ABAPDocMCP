@@ -75,6 +75,7 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.AllowedOps, "allowed-ops", "", "Whitelist of allowed operation types (e.g., \"RSQ\" for Read, Search, Query only)")
 	rootCmd.Flags().StringVar(&cfg.DisallowedOps, "disallowed-ops", "", "Blacklist of operation types to block (e.g., \"CDUA\" for Create, Delete, Update, Activate)")
 	rootCmd.Flags().StringSliceVar(&cfg.AllowedPackages, "allowed-packages", nil, "Restrict operations to specific packages (comma-separated, supports wildcards like Z*)")
+	rootCmd.Flags().BoolVar(&cfg.EnableTransports, "enable-transports", false, "Enable transport management operations (disabled by default for safety)")
 
 	// Mode options
 	rootCmd.Flags().StringVar(&cfg.Mode, "mode", "focused", "Tool mode: focused (19 essential tools) or expert (all 45 tools)")
@@ -96,6 +97,7 @@ func init() {
 	viper.BindPFlag("allowed-ops", rootCmd.Flags().Lookup("allowed-ops"))
 	viper.BindPFlag("disallowed-ops", rootCmd.Flags().Lookup("disallowed-ops"))
 	viper.BindPFlag("allowed-packages", rootCmd.Flags().Lookup("allowed-packages"))
+	viper.BindPFlag("enable-transports", rootCmd.Flags().Lookup("enable-transports"))
 	viper.BindPFlag("mode", rootCmd.Flags().Lookup("mode"))
 	viper.BindPFlag("verbose", rootCmd.Flags().Lookup("verbose"))
 
@@ -146,6 +148,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 		if len(cfg.AllowedPackages) > 0 {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Allowed packages: %v\n", cfg.AllowedPackages)
+		}
+		if cfg.EnableTransports {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Transport management ENABLED\n")
 		}
 		if !cfg.ReadOnly && !cfg.BlockFreeSQL && cfg.AllowedOps == "" && cfg.DisallowedOps == "" && len(cfg.AllowedPackages) == 0 {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: UNRESTRICTED (no safety checks active)\n")
@@ -237,6 +242,9 @@ func resolveConfig(cmd *cobra.Command) {
 		if pkgs := viper.GetStringSlice("ALLOWED_PACKAGES"); len(pkgs) > 0 {
 			cfg.AllowedPackages = pkgs
 		}
+	}
+	if !cmd.Flags().Changed("enable-transports") {
+		cfg.EnableTransports = viper.GetBool("ENABLE_TRANSPORTS")
 	}
 }
 

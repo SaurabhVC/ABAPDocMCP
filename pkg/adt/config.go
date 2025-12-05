@@ -126,6 +126,14 @@ func WithAllowedPackages(packages ...string) Option {
 	}
 }
 
+// WithEnableTransports enables transport management operations.
+// By default, transport operations are disabled - this flag explicitly enables them.
+func WithEnableTransports() Option {
+	return func(c *Config) {
+		c.Safety.EnableTransports = true
+	}
+}
+
 // HasBasicAuth returns true if username and password are configured.
 func (c *Config) HasBasicAuth() bool {
 	return c.Username != "" && c.Password != ""

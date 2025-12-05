@@ -181,3 +181,49 @@ func TestClient_NameNormalization(t *testing.T) {
 		t.Error("Request should use uppercase program name")
 	}
 }
+
+func TestParseSRVBMetadata(t *testing.T) {
+	xmlData := `<?xml version="1.0" encoding="utf-8"?>
+<srvb:serviceBinding srvb:releaseSupported="false" srvb:published="true" srvb:repair="false"
+    adtcore:name="Z_RAP_TRAVEL_O2" adtcore:type="SRVB/SVB"
+    adtcore:description="Travel Booking Service"
+    xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"
+    xmlns:adtcore="http://www.sap.com/adt/core">
+  <srvb:binding srvb:type="ODATA" srvb:version="V2" srvb:category="0">
+    <srvb:implementation adtcore:name="Z_RAP_TRAVEL_O2"/>
+  </srvb:binding>
+  <srvb:services srvb:name="Z_RAP_TRAVEL_O2">
+    <srvb:content srvb:version="0001" srvb:releaseState="">
+      <srvb:serviceDefinition adtcore:uri="/sap/bc/adt/ddic/srvd/sources/z_rap_travel"
+          adtcore:type="SRVD/SRV" adtcore:name="Z_RAP_TRAVEL"/>
+    </srvb:content>
+  </srvb:services>
+</srvb:serviceBinding>`
+
+	result, err := parseSRVBMetadata([]byte(xmlData))
+	if err != nil {
+		t.Fatalf("parseSRVBMetadata failed: %v", err)
+	}
+
+	if result.Name != "Z_RAP_TRAVEL_O2" {
+		t.Errorf("expected name 'Z_RAP_TRAVEL_O2', got '%s'", result.Name)
+	}
+	if result.Type != "SRVB/SVB" {
+		t.Errorf("expected type 'SRVB/SVB', got '%s'", result.Type)
+	}
+	if result.Description != "Travel Booking Service" {
+		t.Errorf("expected description 'Travel Booking Service', got '%s'", result.Description)
+	}
+	if !result.Published {
+		t.Error("expected published to be true")
+	}
+	if result.BindingType != "ODATA" {
+		t.Errorf("expected binding type 'ODATA', got '%s'", result.BindingType)
+	}
+	if result.BindingVersion != "V2" {
+		t.Errorf("expected binding version 'V2', got '%s'", result.BindingVersion)
+	}
+	if result.ServiceDefName != "Z_RAP_TRAVEL" {
+		t.Errorf("expected service def name 'Z_RAP_TRAVEL', got '%s'", result.ServiceDefName)
+	}
+}

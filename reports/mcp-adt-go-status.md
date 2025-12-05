@@ -1,6 +1,6 @@
 # vsp Implementation Status
 
-**Date:** 2025-12-01
+**Date:** 2025-12-05
 **Project:** Go port of SAP ADT API as MCP server
 **Repository:** https://github.com/oisee/vibing-steampunk
 
@@ -10,10 +10,17 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Tools Implemented | 36 |
-| Phase | 4 (Code Intelligence) |
+| Total Tools Implemented | 68 (31 focused, 68 expert) |
+| Phase | 4 (Native ADT Features) - Complete |
 | Test Coverage | Unit + Integration |
 | Build Status | Passing |
+
+### New in This Release (v2.1.0)
+- **Runtime Errors (RABAX):** GetDumps, GetDump
+- **ABAP Profiler (ATRA):** ListTraces, GetTrace
+- **SQL Trace (ST05):** GetSQLTraceState, ListSQLTraces
+- **System Info:** GetSystemInfo, GetInstalledComponents
+- **Code Analysis (CAI):** GetCallGraph, GetObjectStructure
 
 ---
 

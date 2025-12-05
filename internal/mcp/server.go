@@ -38,11 +38,12 @@ type Config struct {
 	Mode string
 
 	// Safety configuration
-	ReadOnly        bool
-	BlockFreeSQL    bool
-	AllowedOps      string
-	DisallowedOps   string
-	AllowedPackages []string
+	ReadOnly         bool
+	BlockFreeSQL     bool
+	AllowedOps       string
+	DisallowedOps    string
+	AllowedPackages  []string
+	EnableTransports bool // Explicitly enable transport management (default: disabled)
 }
 
 // NewServer creates a new MCP server for ABAP ADT tools.
@@ -78,6 +79,9 @@ func NewServer(cfg *Config) *Server {
 	}
 	if len(cfg.AllowedPackages) > 0 {
 		safety.AllowedPackages = cfg.AllowedPackages
+	}
+	if cfg.EnableTransports {
+		safety.EnableTransports = true
 	}
 	opts = append(opts, adt.WithSafety(safety))
 
@@ -149,6 +153,26 @@ func (s *Server) registerTools(mode string) {
 		// File-based operations (2)
 		"ImportFromFile": true, // File → SAP (replaces DeployFromFile)
 		"ExportToFile":   true, // SAP → File (replaces SaveToFile)
+
+		// System information (2)
+		"GetSystemInfo":         true, // System ID, release, kernel
+		"GetInstalledComponents": true, // Installed software components
+
+		// Code analysis (2)
+		"GetCallGraph":       true, // Call hierarchy for methods/functions
+		"GetObjectStructure": true, // Object explorer tree
+
+		// Runtime errors / Short dumps (2)
+		"GetDumps": true, // List runtime errors
+		"GetDump":  true, // Get dump details
+
+		// ABAP Profiler / Traces (2)
+		"ListTraces": true, // List trace files
+		"GetTrace":   true, // Get trace analysis
+
+		// SQL Trace / ST05 (2)
+		"GetSQLTraceState": true, // Check if SQL trace is active
+		"ListSQLTraces":    true, // List SQL trace files
 	}
 
 	// Helper to check if tool should be registered
@@ -357,6 +381,156 @@ func (s *Server) registerTools(mode string) {
 	), s.handleGetTypeInfo)
 	}
 
+
+	// --- System Information ---
+
+	// GetSystemInfo
+	if shouldRegister("GetSystemInfo") {
+		s.mcpServer.AddTool(mcp.NewTool("GetSystemInfo",
+			mcp.WithDescription("Get SAP system information (system ID, release, kernel, database)"),
+		), s.handleGetSystemInfo)
+	}
+
+	// GetInstalledComponents
+	if shouldRegister("GetInstalledComponents") {
+		s.mcpServer.AddTool(mcp.NewTool("GetInstalledComponents",
+			mcp.WithDescription("List installed software components with version information"),
+		), s.handleGetInstalledComponents)
+	}
+
+	// --- Code Analysis Infrastructure (CAI) ---
+
+	// GetCallGraph
+	if shouldRegister("GetCallGraph") {
+		s.mcpServer.AddTool(mcp.NewTool("GetCallGraph",
+			mcp.WithDescription("Get call hierarchy for methods/functions. Shows callers or callees of an ABAP object."),
+			mcp.WithString("object_uri",
+				mcp.Required(),
+				mcp.Description("ADT URI of the object (e.g., /sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=10,1)"),
+			),
+			mcp.WithString("direction",
+				mcp.Description("Direction: 'callers' (who calls this) or 'callees' (what this calls). Default: callers"),
+			),
+			mcp.WithNumber("max_depth",
+				mcp.Description("Maximum depth of call hierarchy (default: 3)"),
+			),
+			mcp.WithNumber("max_results",
+				mcp.Description("Maximum number of results (default: 100)"),
+			),
+		), s.handleGetCallGraph)
+	}
+
+	// GetObjectStructure
+	if shouldRegister("GetObjectStructure") {
+		s.mcpServer.AddTool(mcp.NewTool("GetObjectStructure",
+			mcp.WithDescription("Get object explorer tree structure. Returns hierarchical view of object components."),
+			mcp.WithString("object_name",
+				mcp.Required(),
+				mcp.Description("Object name (e.g., ZCL_TEST, ZPROGRAM)"),
+			),
+			mcp.WithNumber("max_results",
+				mcp.Description("Maximum number of results (default: 100)"),
+			),
+		), s.handleGetObjectStructure)
+	}
+
+	// --- Runtime Errors / Short Dumps (RABAX) ---
+
+	// GetDumps
+	if shouldRegister("GetDumps") {
+		s.mcpServer.AddTool(mcp.NewTool("GetDumps",
+			mcp.WithDescription("List runtime errors (short dumps) from the SAP system. Filter by user, exception type, program, date range."),
+			mcp.WithString("user",
+				mcp.Description("Filter by username"),
+			),
+			mcp.WithString("exception_type",
+				mcp.Description("Filter by exception type (e.g., CX_SY_ZERODIVIDE)"),
+			),
+			mcp.WithString("program",
+				mcp.Description("Filter by program name"),
+			),
+			mcp.WithString("package",
+				mcp.Description("Filter by package"),
+			),
+			mcp.WithString("date_from",
+				mcp.Description("Start date (YYYYMMDD format)"),
+			),
+			mcp.WithString("date_to",
+				mcp.Description("End date (YYYYMMDD format)"),
+			),
+			mcp.WithNumber("max_results",
+				mcp.Description("Maximum number of results (default: 100)"),
+			),
+		), s.handleGetDumps)
+	}
+
+	// GetDump
+	if shouldRegister("GetDump") {
+		s.mcpServer.AddTool(mcp.NewTool("GetDump",
+			mcp.WithDescription("Get full details of a specific runtime error (short dump) including stack trace."),
+			mcp.WithString("dump_id",
+				mcp.Required(),
+				mcp.Description("Dump ID from GetDumps result"),
+			),
+		), s.handleGetDump)
+	}
+
+	// --- ABAP Profiler / Runtime Traces (ATRA) ---
+
+	// ListTraces
+	if shouldRegister("ListTraces") {
+		s.mcpServer.AddTool(mcp.NewTool("ListTraces",
+			mcp.WithDescription("List ABAP runtime traces (profiler results) from the SAP system."),
+			mcp.WithString("user",
+				mcp.Description("Filter by username"),
+			),
+			mcp.WithString("process_type",
+				mcp.Description("Filter by process type"),
+			),
+			mcp.WithString("object_type",
+				mcp.Description("Filter by object type"),
+			),
+			mcp.WithNumber("max_results",
+				mcp.Description("Maximum number of results (default: 100)"),
+			),
+		), s.handleListTraces)
+	}
+
+	// GetTrace
+	if shouldRegister("GetTrace") {
+		s.mcpServer.AddTool(mcp.NewTool("GetTrace",
+			mcp.WithDescription("Get trace analysis (hitlist, statements, or database accesses) for a specific trace."),
+			mcp.WithString("trace_id",
+				mcp.Required(),
+				mcp.Description("Trace ID from ListTraces result"),
+			),
+			mcp.WithString("tool_type",
+				mcp.Description("Analysis type: 'hitlist' (default), 'statements', 'dbAccesses'"),
+			),
+		), s.handleGetTrace)
+	}
+
+	// --- SQL Trace (ST05) ---
+
+	// GetSQLTraceState
+	if shouldRegister("GetSQLTraceState") {
+		s.mcpServer.AddTool(mcp.NewTool("GetSQLTraceState",
+			mcp.WithDescription("Check if SQL trace (ST05) is currently active."),
+		), s.handleGetSQLTraceState)
+	}
+
+	// ListSQLTraces
+	if shouldRegister("ListSQLTraces") {
+		s.mcpServer.AddTool(mcp.NewTool("ListSQLTraces",
+			mcp.WithDescription("List SQL trace files from ST05."),
+			mcp.WithString("user",
+				mcp.Description("Filter by username"),
+			),
+			mcp.WithNumber("max_results",
+				mcp.Description("Maximum number of results (default: 100)"),
+			),
+		), s.handleListSQLTraces)
+	}
 
 	// SearchObject
 	if shouldRegister("SearchObject") {
@@ -1025,6 +1199,107 @@ func (s *Server) registerTools(mode string) {
 	), s.handleGetTypeHierarchy)
 	}
 
+	// GetClassComponents - get class structure (methods, attributes, events)
+	if shouldRegister("GetClassComponents") {
+		s.mcpServer.AddTool(mcp.NewTool("GetClassComponents",
+			mcp.WithDescription("Get the structure of a class - lists all methods, attributes, events, and other components with their visibility and properties"),
+			mcp.WithString("class_url",
+				mcp.Required(),
+				mcp.Description("ADT URL of the class (e.g., /sap/bc/adt/oo/classes/ZCL_TEST)"),
+			),
+		), s.handleGetClassComponents)
+	}
+
+	// GetInactiveObjects - list objects that need activation
+	if shouldRegister("GetInactiveObjects") {
+		s.mcpServer.AddTool(mcp.NewTool("GetInactiveObjects",
+			mcp.WithDescription("Get all inactive objects for the current user - objects that have been modified but not yet activated"),
+		), s.handleGetInactiveObjects)
+	}
+
+	// Transport Management Tools (require EnableTransports flag)
+	// GetUserTransports - list transport requests for a user
+	if shouldRegister("GetUserTransports") {
+		s.mcpServer.AddTool(mcp.NewTool("GetUserTransports",
+			mcp.WithDescription("Get all transport requests for a user (requires --enable-transports flag). Returns both workbench and customizing requests grouped by target system."),
+			mcp.WithString("user_name",
+				mcp.Required(),
+				mcp.Description("SAP user name (will be converted to uppercase)"),
+			),
+		), s.handleGetUserTransports)
+	}
+
+	// GetTransportInfo - get transport info for an object
+	if shouldRegister("GetTransportInfo") {
+		s.mcpServer.AddTool(mcp.NewTool("GetTransportInfo",
+			mcp.WithDescription("Get transport information for an ABAP object (requires --enable-transports flag). Returns available transports and lock status."),
+			mcp.WithString("object_url",
+				mcp.Required(),
+				mcp.Description("ADT URL of the object (e.g., /sap/bc/adt/programs/programs/ZTEST)"),
+			),
+			mcp.WithString("dev_class",
+				mcp.Required(),
+				mcp.Description("Development class/package of the object"),
+			),
+		), s.handleGetTransportInfo)
+	}
+
+	// CreateTransport - create a new transport request
+	if shouldRegister("CreateTransport") {
+		s.mcpServer.AddTool(mcp.NewTool("CreateTransport",
+			mcp.WithDescription("Create a new transport request (requires --enable-transports flag). Returns the transport number on success."),
+			mcp.WithString("object_url",
+				mcp.Required(),
+				mcp.Description("ADT URL of the object to transport"),
+			),
+			mcp.WithString("description",
+				mcp.Required(),
+				mcp.Description("Transport request description"),
+			),
+			mcp.WithString("dev_class",
+				mcp.Required(),
+				mcp.Description("Development class/package of the object"),
+			),
+		), s.handleCreateTransport)
+	}
+
+	// ReleaseTransport - release a transport request
+	if shouldRegister("ReleaseTransport") {
+		s.mcpServer.AddTool(mcp.NewTool("ReleaseTransport",
+			mcp.WithDescription("Release a transport request (requires --enable-transports flag). Returns release reports and messages."),
+			mcp.WithString("transport_number",
+				mcp.Required(),
+				mcp.Description("Transport request number (e.g., DEVK900001)"),
+			),
+			mcp.WithBoolean("ignore_locks",
+				mcp.Description("Ignore locks and release anyway (default: false)"),
+			),
+		), s.handleReleaseTransport)
+	}
+
+	// ExecuteABAP - execute arbitrary ABAP code via unit test wrapper (Expert mode only)
+	if shouldRegister("ExecuteABAP") {
+		s.mcpServer.AddTool(mcp.NewTool("ExecuteABAP",
+			mcp.WithDescription("Execute arbitrary ABAP code via unit test wrapper. Creates temp program, injects code into test method, runs via RunUnitTests, extracts results from assertion messages, cleans up. Use lv_result variable to return output. WARNING: Powerful tool - use responsibly."),
+			mcp.WithString("code",
+				mcp.Required(),
+				mcp.Description("ABAP code to execute. Set lv_result variable to return output via assertion message."),
+			),
+			mcp.WithString("risk_level",
+				mcp.Description("Risk level: harmless (default, no DB writes), dangerous (can write to DB), critical (full access)"),
+			),
+			mcp.WithString("return_variable",
+				mcp.Description("Name of the variable to return (default: lv_result)"),
+			),
+			mcp.WithBoolean("keep_program",
+				mcp.Description("Don't delete temp program after execution (for debugging)"),
+			),
+			mcp.WithString("program_prefix",
+				mcp.Description("Prefix for temp program name (default: ZTEMP_EXEC_)"),
+			),
+		), s.handleExecuteABAP)
+	}
+
 }
 
 // newToolResultError creates an error result for tool execution failures.
@@ -1287,6 +1562,215 @@ func (s *Server) handleGetTypeInfo(ctx context.Context, request mcp.CallToolRequ
 	}
 
 	result, _ := json.MarshalIndent(typeInfo, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+// --- System Information Handlers ---
+
+func (s *Server) handleGetSystemInfo(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	info, err := s.adtClient.GetSystemInfo(ctx)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get system info: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(info, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+func (s *Server) handleGetInstalledComponents(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	components, err := s.adtClient.GetInstalledComponents(ctx)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get installed components: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(components, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+// --- Code Analysis Infrastructure Handlers ---
+
+func (s *Server) handleGetCallGraph(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	objectURI, ok := request.Params.Arguments["object_uri"].(string)
+	if !ok || objectURI == "" {
+		return newToolResultError("object_uri is required"), nil
+	}
+
+	opts := &adt.CallGraphOptions{
+		Direction:  "callers",
+		MaxDepth:   3,
+		MaxResults: 100,
+	}
+
+	if dir, ok := request.Params.Arguments["direction"].(string); ok && dir != "" {
+		opts.Direction = dir
+	}
+	if depth, ok := request.Params.Arguments["max_depth"].(float64); ok && depth > 0 {
+		opts.MaxDepth = int(depth)
+	}
+	if max, ok := request.Params.Arguments["max_results"].(float64); ok && max > 0 {
+		opts.MaxResults = int(max)
+	}
+
+	graph, err := s.adtClient.GetCallGraph(ctx, objectURI, opts)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get call graph: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(graph, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+func (s *Server) handleGetObjectStructure(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	objectName, ok := request.Params.Arguments["object_name"].(string)
+	if !ok || objectName == "" {
+		return newToolResultError("object_name is required"), nil
+	}
+
+	maxResults := 100
+	if max, ok := request.Params.Arguments["max_results"].(float64); ok && max > 0 {
+		maxResults = int(max)
+	}
+
+	structure, err := s.adtClient.GetObjectStructureCAI(ctx, objectName, maxResults)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get object structure: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(structure, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+// --- Runtime Errors / Short Dumps Handlers ---
+
+func (s *Server) handleGetDumps(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	opts := &adt.DumpQueryOptions{
+		MaxResults: 100,
+	}
+
+	if user, ok := request.Params.Arguments["user"].(string); ok && user != "" {
+		opts.User = user
+	}
+	if excType, ok := request.Params.Arguments["exception_type"].(string); ok && excType != "" {
+		opts.ExceptionType = excType
+	}
+	if prog, ok := request.Params.Arguments["program"].(string); ok && prog != "" {
+		opts.Program = prog
+	}
+	if pkg, ok := request.Params.Arguments["package"].(string); ok && pkg != "" {
+		opts.Package = pkg
+	}
+	if dateFrom, ok := request.Params.Arguments["date_from"].(string); ok && dateFrom != "" {
+		opts.DateFrom = dateFrom
+	}
+	if dateTo, ok := request.Params.Arguments["date_to"].(string); ok && dateTo != "" {
+		opts.DateTo = dateTo
+	}
+	if max, ok := request.Params.Arguments["max_results"].(float64); ok && max > 0 {
+		opts.MaxResults = int(max)
+	}
+
+	dumps, err := s.adtClient.GetDumps(ctx, opts)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get dumps: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(dumps, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+func (s *Server) handleGetDump(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	dumpID, ok := request.Params.Arguments["dump_id"].(string)
+	if !ok || dumpID == "" {
+		return newToolResultError("dump_id is required"), nil
+	}
+
+	dump, err := s.adtClient.GetDump(ctx, dumpID)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get dump: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(dump, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+// --- ABAP Profiler / Traces Handlers ---
+
+func (s *Server) handleListTraces(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	opts := &adt.TraceQueryOptions{
+		MaxResults: 100,
+	}
+
+	if user, ok := request.Params.Arguments["user"].(string); ok && user != "" {
+		opts.User = user
+	}
+	if procType, ok := request.Params.Arguments["process_type"].(string); ok && procType != "" {
+		opts.ProcessType = procType
+	}
+	if objType, ok := request.Params.Arguments["object_type"].(string); ok && objType != "" {
+		opts.ObjectType = objType
+	}
+	if max, ok := request.Params.Arguments["max_results"].(float64); ok && max > 0 {
+		opts.MaxResults = int(max)
+	}
+
+	traces, err := s.adtClient.ListTraces(ctx, opts)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to list traces: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(traces, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+func (s *Server) handleGetTrace(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	traceID, ok := request.Params.Arguments["trace_id"].(string)
+	if !ok || traceID == "" {
+		return newToolResultError("trace_id is required"), nil
+	}
+
+	toolType := "hitlist"
+	if tt, ok := request.Params.Arguments["tool_type"].(string); ok && tt != "" {
+		toolType = tt
+	}
+
+	analysis, err := s.adtClient.GetTrace(ctx, traceID, toolType)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get trace: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(analysis, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+// --- SQL Trace (ST05) Handlers ---
+
+func (s *Server) handleGetSQLTraceState(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	state, err := s.adtClient.GetSQLTraceState(ctx)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to get SQL trace state: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(state, "", "  ")
+	return mcp.NewToolResultText(string(result)), nil
+}
+
+func (s *Server) handleListSQLTraces(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	user := ""
+	maxResults := 100
+
+	if u, ok := request.Params.Arguments["user"].(string); ok {
+		user = u
+	}
+	if max, ok := request.Params.Arguments["max_results"].(float64); ok && max > 0 {
+		maxResults = int(max)
+	}
+
+	traces, err := s.adtClient.ListSQLTraces(ctx, user, maxResults)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("Failed to list SQL traces: %v", err)), nil
+	}
+
+	result, _ := json.MarshalIndent(traces, "", "  ")
 	return mcp.NewToolResultText(string(result)), nil
 }
 
@@ -2203,13 +2687,162 @@ func (s *Server) handleGetTypeHierarchy(ctx context.Context, request mcp.CallToo
 	return mcp.NewToolResultText(string(output)), nil
 }
 
+func (s *Server) handleGetClassComponents(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	classURL, ok := request.Params.Arguments["class_url"].(string)
+	if !ok || classURL == "" {
+		return newToolResultError("class_url is required"), nil
+	}
+
+	components, err := s.adtClient.GetClassComponents(ctx, classURL)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("GetClassComponents failed: %v", err)), nil
+	}
+
+	// Format output with summary
+	output := formatClassComponents(components)
+	return mcp.NewToolResultText(output), nil
+}
+
+// formatClassComponents creates a readable summary of class components
+func formatClassComponents(comp *adt.ClassComponent) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Class: %s (%s)\n\n", comp.Name, comp.Type))
+
+	// Group components by type
+	methods := []adt.ClassComponent{}
+	attributes := []adt.ClassComponent{}
+	events := []adt.ClassComponent{}
+	types := []adt.ClassComponent{}
+	others := []adt.ClassComponent{}
+
+	for _, c := range comp.Components {
+		switch {
+		case strings.Contains(c.Type, "METH"):
+			methods = append(methods, c)
+		case strings.Contains(c.Type, "DATA") || strings.Contains(c.Type, "ATTR"):
+			attributes = append(attributes, c)
+		case strings.Contains(c.Type, "EVNT") || strings.Contains(c.Type, "EVENT"):
+			events = append(events, c)
+		case strings.Contains(c.Type, "TYPE"):
+			types = append(types, c)
+		default:
+			others = append(others, c)
+		}
+	}
+
+	if len(methods) > 0 {
+		sb.WriteString(fmt.Sprintf("## Methods (%d)\n", len(methods)))
+		for _, m := range methods {
+			flags := componentFlags(m)
+			sb.WriteString(fmt.Sprintf("  - %s [%s]%s\n", m.Name, m.Visibility, flags))
+			if m.Description != "" {
+				sb.WriteString(fmt.Sprintf("    %s\n", m.Description))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(attributes) > 0 {
+		sb.WriteString(fmt.Sprintf("## Attributes (%d)\n", len(attributes)))
+		for _, a := range attributes {
+			flags := componentFlags(a)
+			sb.WriteString(fmt.Sprintf("  - %s [%s]%s\n", a.Name, a.Visibility, flags))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(events) > 0 {
+		sb.WriteString(fmt.Sprintf("## Events (%d)\n", len(events)))
+		for _, e := range events {
+			sb.WriteString(fmt.Sprintf("  - %s [%s]\n", e.Name, e.Visibility))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(types) > 0 {
+		sb.WriteString(fmt.Sprintf("## Types (%d)\n", len(types)))
+		for _, t := range types {
+			sb.WriteString(fmt.Sprintf("  - %s [%s]\n", t.Name, t.Visibility))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(others) > 0 {
+		sb.WriteString(fmt.Sprintf("## Other Components (%d)\n", len(others)))
+		for _, o := range others {
+			sb.WriteString(fmt.Sprintf("  - %s (%s) [%s]\n", o.Name, o.Type, o.Visibility))
+		}
+	}
+
+	return sb.String()
+}
+
+func componentFlags(c adt.ClassComponent) string {
+	var flags []string
+	if c.IsStatic {
+		flags = append(flags, "static")
+	}
+	if c.IsFinal {
+		flags = append(flags, "final")
+	}
+	if c.IsAbstract {
+		flags = append(flags, "abstract")
+	}
+	if c.ReadOnly {
+		flags = append(flags, "read-only")
+	}
+	if c.Constant {
+		flags = append(flags, "constant")
+	}
+	if len(flags) > 0 {
+		return " " + strings.Join(flags, ", ")
+	}
+	return ""
+}
+
+func (s *Server) handleGetInactiveObjects(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	objects, err := s.adtClient.GetInactiveObjects(ctx)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("GetInactiveObjects failed: %v", err)), nil
+	}
+
+	if len(objects) == 0 {
+		return mcp.NewToolResultText("No inactive objects found."), nil
+	}
+
+	// Format output
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Found %d inactive object(s):\n\n", len(objects)))
+
+	for _, record := range objects {
+		if record.Object != nil {
+			obj := record.Object
+			sb.WriteString(fmt.Sprintf("- %s (%s)\n", obj.Name, obj.Type))
+			sb.WriteString(fmt.Sprintf("  URI: %s\n", obj.URI))
+			if obj.User != "" {
+				sb.WriteString(fmt.Sprintf("  User: %s\n", obj.User))
+			}
+			if obj.Deleted {
+				sb.WriteString("  Status: DELETED\n")
+			}
+		}
+		if record.Transport != nil {
+			tr := record.Transport
+			sb.WriteString(fmt.Sprintf("  Transport: %s\n", tr.Name))
+		}
+		sb.WriteString("\n")
+	}
+
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
 // registerGetSource registers the unified GetSource tool
 func (s *Server) registerGetSource() {
 	s.mcpServer.AddTool(mcp.NewTool("GetSource",
 		mcp.WithDescription("Unified tool for reading ABAP source code across different object types. Replaces GetProgram, GetClass, GetInterface, GetFunction, GetInclude, GetFunctionGroup, GetClassInclude."),
 		mcp.WithString("object_type",
 			mcp.Required(),
-			mcp.Description("Object type: PROG (program), CLAS (class), INTF (interface), FUNC (function module), FUGR (function group), INCL (include), DDLS (CDS DDL source), MSAG (message class)"),
+			mcp.Description("Object type: PROG (program), CLAS (class), INTF (interface), FUNC (function module), FUGR (function group), INCL (include), DDLS (CDS DDL source), VIEW (DDIC view), BDEF (behavior definition), SRVD (service definition), SRVB (service binding), MSAG (message class)"),
 		),
 		mcp.WithString("name",
 			mcp.Required(),
@@ -2514,4 +3147,218 @@ func (s *Server) handleGrepPackages(ctx context.Context, request mcp.CallToolReq
 
 	output, _ := json.MarshalIndent(result, "", "  ")
 	return mcp.NewToolResultText(string(output)), nil
+}
+
+// --- Transport Management Handlers ---
+
+func (s *Server) handleGetUserTransports(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	userName, ok := request.Params.Arguments["user_name"].(string)
+	if !ok || userName == "" {
+		return newToolResultError("user_name is required"), nil
+	}
+
+	transports, err := s.adtClient.GetUserTransports(ctx, userName)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("GetUserTransports failed: %v", err)), nil
+	}
+
+	// Format output
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Transports for user %s:\n\n", strings.ToUpper(userName)))
+
+	if len(transports.Workbench) > 0 {
+		sb.WriteString("=== Workbench Requests ===\n")
+		for _, tr := range transports.Workbench {
+			formatTransportRequest(&sb, &tr)
+		}
+	} else {
+		sb.WriteString("No workbench requests found.\n")
+	}
+
+	sb.WriteString("\n")
+
+	if len(transports.Customizing) > 0 {
+		sb.WriteString("=== Customizing Requests ===\n")
+		for _, tr := range transports.Customizing {
+			formatTransportRequest(&sb, &tr)
+		}
+	} else {
+		sb.WriteString("No customizing requests found.\n")
+	}
+
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+func formatTransportRequest(sb *strings.Builder, tr *adt.TransportRequest) {
+	sb.WriteString(fmt.Sprintf("\n%s - %s\n", tr.Number, tr.Description))
+	sb.WriteString(fmt.Sprintf("  Owner: %s, Status: %s", tr.Owner, tr.Status))
+	if tr.Target != "" {
+		sb.WriteString(fmt.Sprintf(", Target: %s", tr.Target))
+	}
+	sb.WriteString("\n")
+
+	if len(tr.Tasks) > 0 {
+		sb.WriteString("  Tasks:\n")
+		for _, task := range tr.Tasks {
+			sb.WriteString(fmt.Sprintf("    %s - %s (Owner: %s, Status: %s)\n",
+				task.Number, task.Description, task.Owner, task.Status))
+			if len(task.Objects) > 0 {
+				for _, obj := range task.Objects {
+					sb.WriteString(fmt.Sprintf("      - %s %s %s\n", obj.PGMID, obj.Type, obj.Name))
+				}
+			}
+		}
+	}
+}
+
+func (s *Server) handleGetTransportInfo(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	objectURL, ok := request.Params.Arguments["object_url"].(string)
+	if !ok || objectURL == "" {
+		return newToolResultError("object_url is required"), nil
+	}
+
+	devClass, ok := request.Params.Arguments["dev_class"].(string)
+	if !ok || devClass == "" {
+		return newToolResultError("dev_class is required"), nil
+	}
+
+	info, err := s.adtClient.GetTransportInfo(ctx, objectURL, devClass)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("GetTransportInfo failed: %v", err)), nil
+	}
+
+	// Format output
+	var sb strings.Builder
+	sb.WriteString("Transport Information:\n\n")
+	sb.WriteString(fmt.Sprintf("PGMID: %s\n", info.PGMID))
+	sb.WriteString(fmt.Sprintf("Object: %s\n", info.Object))
+	sb.WriteString(fmt.Sprintf("Object Name: %s\n", info.ObjectName))
+	sb.WriteString(fmt.Sprintf("Operation: %s\n", info.Operation))
+	sb.WriteString(fmt.Sprintf("Dev Class: %s\n", info.DevClass))
+	sb.WriteString(fmt.Sprintf("Recording: %s\n", info.Recording))
+
+	if info.LockedByUser != "" {
+		sb.WriteString(fmt.Sprintf("\nLocked by: %s", info.LockedByUser))
+		if info.LockedInTask != "" {
+			sb.WriteString(fmt.Sprintf(" in task %s", info.LockedInTask))
+		}
+		sb.WriteString("\n")
+	}
+
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+func (s *Server) handleCreateTransport(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	objectURL, ok := request.Params.Arguments["object_url"].(string)
+	if !ok || objectURL == "" {
+		return newToolResultError("object_url is required"), nil
+	}
+
+	description, ok := request.Params.Arguments["description"].(string)
+	if !ok || description == "" {
+		return newToolResultError("description is required"), nil
+	}
+
+	devClass, ok := request.Params.Arguments["dev_class"].(string)
+	if !ok || devClass == "" {
+		return newToolResultError("dev_class is required"), nil
+	}
+
+	transportNumber, err := s.adtClient.CreateTransport(ctx, objectURL, description, devClass)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("CreateTransport failed: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Transport request created: %s", transportNumber)), nil
+}
+
+func (s *Server) handleReleaseTransport(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	transportNumber, ok := request.Params.Arguments["transport_number"].(string)
+	if !ok || transportNumber == "" {
+		return newToolResultError("transport_number is required"), nil
+	}
+
+	ignoreLocks := false
+	if il, ok := request.Params.Arguments["ignore_locks"].(bool); ok {
+		ignoreLocks = il
+	}
+
+	messages, err := s.adtClient.ReleaseTransport(ctx, transportNumber, ignoreLocks)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("ReleaseTransport failed: %v", err)), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Transport %s released.\n\n", transportNumber))
+
+	if len(messages) > 0 {
+		sb.WriteString("Release Messages:\n")
+		for _, msg := range messages {
+			sb.WriteString(fmt.Sprintf("  %s\n", msg))
+		}
+	}
+
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+// handleExecuteABAP executes arbitrary ABAP code via unit test wrapper.
+func (s *Server) handleExecuteABAP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	code, ok := request.Params.Arguments["code"].(string)
+	if !ok || code == "" {
+		return newToolResultError("code parameter is required"), nil
+	}
+
+	opts := &adt.ExecuteABAPOptions{}
+
+	if riskLevel, ok := request.Params.Arguments["risk_level"].(string); ok && riskLevel != "" {
+		opts.RiskLevel = riskLevel
+	}
+
+	if returnVar, ok := request.Params.Arguments["return_variable"].(string); ok && returnVar != "" {
+		opts.ReturnVariable = returnVar
+	}
+
+	if keepProgram, ok := request.Params.Arguments["keep_program"].(bool); ok {
+		opts.KeepProgram = keepProgram
+	}
+
+	if prefix, ok := request.Params.Arguments["program_prefix"].(string); ok && prefix != "" {
+		opts.ProgramPrefix = prefix
+	}
+
+	result, err := s.adtClient.ExecuteABAP(ctx, code, opts)
+	if err != nil {
+		return newToolResultError(fmt.Sprintf("ExecuteABAP failed: %v", err)), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Program: %s\n", result.ProgramName))
+	sb.WriteString(fmt.Sprintf("Success: %t\n", result.Success))
+	sb.WriteString(fmt.Sprintf("Execution Time: %d µs\n", result.ExecutionTime))
+	sb.WriteString(fmt.Sprintf("Cleaned Up: %t\n", result.CleanedUp))
+	sb.WriteString(fmt.Sprintf("Message: %s\n", result.Message))
+
+	if len(result.Output) > 0 {
+		sb.WriteString("\nOutput:\n")
+		for i, output := range result.Output {
+			sb.WriteString(fmt.Sprintf("  [%d] %s\n", i+1, output))
+		}
+	}
+
+	// Include raw alerts for debugging if no clean output was captured
+	if len(result.Output) == 0 && len(result.RawAlerts) > 0 {
+		sb.WriteString("\nRaw Alerts (for debugging):\n")
+		for _, alert := range result.RawAlerts {
+			sb.WriteString(fmt.Sprintf("  Kind: %s, Severity: %s\n", alert.Kind, alert.Severity))
+			sb.WriteString(fmt.Sprintf("  Title: %s\n", alert.Title))
+			if len(alert.Details) > 0 {
+				sb.WriteString("  Details:\n")
+				for _, d := range alert.Details {
+					sb.WriteString(fmt.Sprintf("    - %s\n", d))
+				}
+			}
+		}
+	}
+
+	return mcp.NewToolResultText(sb.String()), nil
 }

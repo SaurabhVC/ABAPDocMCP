@@ -29,6 +29,7 @@ type SafetyConfig struct {
 	//   L - Lock/Unlock operations
 	//   I - Code intelligence (FindDefinition, CodeCompletion, etc.)
 	//   W - Workflow operations (WriteClass, WriteProgram, CreateClassWithTests)
+	//   X - Transport management (requires EnableTransports=true)
 	// Example: "RSQ" = only reads, searches, and queries allowed
 	AllowedOps string
 
@@ -43,6 +44,11 @@ type SafetyConfig struct {
 
 	// DryRun mode - log operations but don't execute them (useful for testing)
 	DryRun bool
+
+	// EnableTransports explicitly enables transport management operations
+	// By default false - requires conscious opt-in to work with transports
+	// When false, all transport operations (create, release, list) are blocked
+	EnableTransports bool
 }
 
 // DefaultSafetyConfig returns a safe default configuration (read-only, no free SQL)
@@ -89,6 +95,7 @@ const (
 	OpLock         OperationType = 'L' // Lock/Unlock
 	OpIntelligence OperationType = 'I' // Code intelligence
 	OpWorkflow     OperationType = 'W' // High-level workflows
+	OpTransport    OperationType = 'X' // Transport management (requires explicit opt-in)
 )
 
 // IsOperationAllowed checks if an operation type is allowed by the safety config
@@ -110,6 +117,11 @@ func (s *SafetyConfig) IsOperationAllowed(op OperationType) bool {
 
 	// Check BlockFreeSQL
 	if s.BlockFreeSQL && op == OpFreeSQL {
+		return false
+	}
+
+	// Check EnableTransports - transport operations require explicit opt-in
+	if op == OpTransport && !s.EnableTransports {
 		return false
 	}
 

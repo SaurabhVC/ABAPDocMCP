@@ -4,7 +4,7 @@ This file provides context for AI assistants (Claude, etc.) working on this proj
 
 ## Project Overview
 
-**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 20 essential tools (focused mode, default) or 47 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
+**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 31 essential tools (focused mode, default) or 68 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
 
 ## Quick Reference
 
@@ -223,6 +223,12 @@ All research reports, analysis documents, and design specifications follow this 
 - **010:** Cache Implementation Complete - Phase 1 done: in-memory + SQLite caching (2,180 LOC, 16 tests passing)
 - **011:** Safety & Protection Implementation - CRUD protection with operation filtering and package restrictions (530 LOC, 25 tests passing)
 
+#### 2025-12-05 Reports
+- **001:** Code Injection & Bootstrap Strategies - Unit Test execution vehicle, data injection options
+- **002:** Self-Replicating Deploy Agent Design - Rejected due to STRUST/SSL certificate concerns
+- **003:** ADT-Assisted Universal Deployment - Factory Pattern strategy via vsp (ADT-native)
+- **004:** ExecuteABAP Implementation - ABAP code execution via Unit Test wrapper (385 LOC, 2 tests)
+
 #### Reference Documentation (Non-numbered)
 - `abap-adt-discovery-guide.md` - ADT API discovery process
 - `adt-abap-internals-documentation.md` - Detailed ADT endpoint analysis
@@ -258,15 +264,21 @@ When creating a new report:
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 47 (20 focused, 47 expert) |
-| **Unit Tests** | 172 |
+| **Tools** | 68 (31 focused, 68 expert) |
+| **Unit Tests** | 249 |
 | **Integration Tests** | 21+ |
 | **Platforms** | 9 |
-| **Phase** | 3 (DSL & Workflows) - Complete |
-| **Reports** | 12 numbered + 6 reference docs |
+| **Phase** | 4 (Native ADT Features) - In Progress |
+| **Reports** | 17 numbered + 6 reference docs |
 | **Cache Package** | ✅ Complete (in-memory + SQLite) |
 | **Safety System** | ✅ Complete (operation filtering, package restrictions) |
 | **DSL Package** | ✅ Complete (fluent API, YAML workflows, test orchestration) |
+| **ExecuteABAP** | ✅ Complete (code execution via Unit Test wrapper) |
+| **System Info** | ✅ Complete (GetSystemInfo, GetInstalledComponents) |
+| **Code Analysis** | ✅ Complete (GetCallGraph, GetObjectStructure) |
+| **Runtime Errors** | ✅ Complete (GetDumps, GetDump - RABAX) |
+| **ABAP Profiler** | ✅ Complete (ListTraces, GetTrace - ATRA) |
+| **SQL Trace** | ✅ Complete (GetSQLTraceState, ListSQLTraces - ST05) |
 
 ### DSL & Workflow Usage
 

@@ -411,3 +411,81 @@ func TestClient_GrepPackages_MultiplePackages(t *testing.T) {
 		t.Error("Expected results from multiple packages")
 	}
 }
+
+// TestExecuteABAPResult tests the ExecuteABAPResult struct
+func TestExecuteABAPResult(t *testing.T) {
+	result := &ExecuteABAPResult{
+		Success:       true,
+		ProgramName:   "ZTEMP_EXEC_12345678",
+		Output:        []string{"Hello from SAP"},
+		ExecutionTime: 1234,
+		CleanedUp:     true,
+		Message:       "Executed successfully, 1 output(s) returned",
+	}
+
+	if !result.Success {
+		t.Error("Expected Success to be true")
+	}
+
+	if result.ProgramName != "ZTEMP_EXEC_12345678" {
+		t.Errorf("Expected ProgramName ZTEMP_EXEC_12345678, got %s", result.ProgramName)
+	}
+
+	if len(result.Output) != 1 {
+		t.Errorf("Expected 1 output, got %d", len(result.Output))
+	}
+
+	if result.Output[0] != "Hello from SAP" {
+		t.Errorf("Expected output 'Hello from SAP', got %s", result.Output[0])
+	}
+
+	if result.ExecutionTime != 1234 {
+		t.Errorf("Expected ExecutionTime 1234, got %d", result.ExecutionTime)
+	}
+
+	if !result.CleanedUp {
+		t.Error("Expected CleanedUp to be true")
+	}
+}
+
+// TestExecuteABAPOptions tests the ExecuteABAPOptions struct defaults
+func TestExecuteABAPOptions(t *testing.T) {
+	// Test with nil options - should use defaults
+	opts := &ExecuteABAPOptions{}
+
+	if opts.RiskLevel != "" {
+		t.Error("Expected empty RiskLevel for new options")
+	}
+
+	if opts.ReturnVariable != "" {
+		t.Error("Expected empty ReturnVariable for new options")
+	}
+
+	if opts.ProgramPrefix != "" {
+		t.Error("Expected empty ProgramPrefix for new options")
+	}
+
+	// Test with values
+	opts = &ExecuteABAPOptions{
+		RiskLevel:      "dangerous",
+		ReturnVariable: "lv_custom",
+		KeepProgram:    true,
+		ProgramPrefix:  "ZEXEC_",
+	}
+
+	if opts.RiskLevel != "dangerous" {
+		t.Errorf("Expected RiskLevel 'dangerous', got %s", opts.RiskLevel)
+	}
+
+	if opts.ReturnVariable != "lv_custom" {
+		t.Errorf("Expected ReturnVariable 'lv_custom', got %s", opts.ReturnVariable)
+	}
+
+	if !opts.KeepProgram {
+		t.Error("Expected KeepProgram to be true")
+	}
+
+	if opts.ProgramPrefix != "ZEXEC_" {
+		t.Errorf("Expected ProgramPrefix 'ZEXEC_', got %s", opts.ProgramPrefix)
+	}
+}

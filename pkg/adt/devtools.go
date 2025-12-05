@@ -129,6 +129,14 @@ type InactiveObject struct {
 	Type      string `json:"type"`
 	Name      string `json:"name"`
 	ParentURI string `json:"parentUri,omitempty"`
+	User      string `json:"user,omitempty"`
+	Deleted   bool   `json:"deleted,omitempty"`
+}
+
+// InactiveObjectRecord represents an inactive object with its transport info.
+type InactiveObjectRecord struct {
+	Object    *InactiveObject `json:"object,omitempty"`
+	Transport *InactiveObject `json:"transport,omitempty"`
 }
 
 // Activate activates one or more ABAP objects.
@@ -240,6 +248,83 @@ func parseActivationResult(data []byte) (*ActivationResult, error) {
 	}
 
 	return result, nil
+}
+
+// GetInactiveObjects retrieves all inactive objects for the current user.
+// Returns objects that have been modified but not yet activated.
+func (c *Client) GetInactiveObjects(ctx context.Context) ([]InactiveObjectRecord, error) {
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/activation/inactiveobjects", &RequestOptions{
+		Method: http.MethodGet,
+		Accept: "application/vnd.sap.adt.inactivectsobjects.v1+xml, application/xml;q=0.8",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get inactive objects failed: %w", err)
+	}
+
+	return parseInactiveObjects(resp.Body)
+}
+
+func parseInactiveObjects(data []byte) ([]InactiveObjectRecord, error) {
+	if len(data) == 0 {
+		return []InactiveObjectRecord{}, nil
+	}
+
+	// Strip namespace prefixes
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "ioc:", "")
+	xmlStr = strings.ReplaceAll(xmlStr, "adtcore:", "")
+
+	type ref struct {
+		URI       string `xml:"uri,attr"`
+		Type      string `xml:"type,attr"`
+		Name      string `xml:"name,attr"`
+		ParentURI string `xml:"parentUri,attr"`
+	}
+	type objectElement struct {
+		Deleted bool `xml:"deleted,attr"`
+		User    string `xml:"user,attr"`
+		Ref     ref    `xml:"ref"`
+	}
+	type entry struct {
+		Object    *objectElement `xml:"object"`
+		Transport *objectElement `xml:"transport"`
+	}
+	type inactiveObjects struct {
+		Entries []entry `xml:"entry"`
+	}
+
+	var resp inactiveObjects
+	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
+		return nil, fmt.Errorf("parsing inactive objects: %w", err)
+	}
+
+	var results []InactiveObjectRecord
+	for _, e := range resp.Entries {
+		record := InactiveObjectRecord{}
+		if e.Object != nil {
+			record.Object = &InactiveObject{
+				URI:       e.Object.Ref.URI,
+				Type:      e.Object.Ref.Type,
+				Name:      e.Object.Ref.Name,
+				ParentURI: e.Object.Ref.ParentURI,
+				User:      e.Object.User,
+				Deleted:   e.Object.Deleted,
+			}
+		}
+		if e.Transport != nil {
+			record.Transport = &InactiveObject{
+				URI:       e.Transport.Ref.URI,
+				Type:      e.Transport.Ref.Type,
+				Name:      e.Transport.Ref.Name,
+				ParentURI: e.Transport.Ref.ParentURI,
+				User:      e.Transport.User,
+				Deleted:   e.Transport.Deleted,
+			}
+		}
+		results = append(results, record)
+	}
+
+	return results, nil
 }
 
 // --- Unit Tests ---

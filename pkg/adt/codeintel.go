@@ -428,6 +428,115 @@ func (c *Client) PrettyPrint(ctx context.Context, source string) (string, error)
 	return string(resp.Body), nil
 }
 
+// --- Class Components (Object Structure) ---
+
+// ClassComponent represents a component of an ABAP class (method, attribute, event, etc.)
+type ClassComponent struct {
+	Name        string           `json:"name"`
+	Type        string           `json:"type"`
+	Visibility  string           `json:"visibility"`
+	Href        string           `json:"href,omitempty"`
+	Constant    bool             `json:"constant,omitempty"`
+	Level       string           `json:"level,omitempty"`
+	ReadOnly    bool             `json:"readOnly,omitempty"`
+	IsStatic    bool             `json:"isStatic,omitempty"`
+	IsFinal     bool             `json:"isFinal,omitempty"`
+	IsAbstract  bool             `json:"isAbstract,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Components  []ClassComponent `json:"components,omitempty"`
+}
+
+// GetClassComponents retrieves the structure of a class (methods, attributes, events, etc.)
+// classURL is the URL of the class (e.g., "/sap/bc/adt/oo/classes/ZCL_TEST")
+func (c *Client) GetClassComponents(ctx context.Context, classURL string) (*ClassComponent, error) {
+	endpoint := fmt.Sprintf("%s/objectstructure", classURL)
+
+	query := url.Values{}
+	query.Set("version", "active")
+	query.Set("withShortDescriptions", "true")
+
+	resp, err := c.transport.Request(ctx, endpoint, &RequestOptions{
+		Method:      http.MethodGet,
+		ContentType: "application/*",
+		Query:       query,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get class components failed: %w", err)
+	}
+
+	return parseClassComponents(resp.Body)
+}
+
+// xmlClassComponent is the internal XML structure for parsing
+type xmlClassComponent struct {
+	Name        string              `xml:"name,attr"`
+	Type        string              `xml:"type,attr"`
+	Visibility  string              `xml:"visibility,attr"`
+	Constant    bool                `xml:"constant,attr"`
+	Level       string              `xml:"level,attr"`
+	ReadOnly    bool                `xml:"readOnly,attr"`
+	IsStatic    bool                `xml:"isStatic,attr"`
+	IsFinal     bool                `xml:"isFinal,attr"`
+	IsAbstract  bool                `xml:"isAbstract,attr"`
+	Description string              `xml:"description,attr"`
+	Links       []xmlComponentLink  `xml:"link"`
+	Components  []xmlClassComponent `xml:"objectStructureElement"`
+}
+
+type xmlComponentLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr"`
+	Type string `xml:"type,attr"`
+}
+
+func parseClassComponents(data []byte) (*ClassComponent, error) {
+	// Strip namespace prefixes for easier parsing
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "abapsource:", "")
+	xmlStr = strings.ReplaceAll(xmlStr, "adtcore:", "")
+	xmlStr = strings.ReplaceAll(xmlStr, "atom:", "")
+
+	var root xmlClassComponent
+	if err := xml.Unmarshal([]byte(xmlStr), &root); err != nil {
+		return nil, fmt.Errorf("parsing class components: %w", err)
+	}
+
+	// Convert to our type recursively
+	return convertXMLElement(&root), nil
+}
+
+func convertXMLElement(e *xmlClassComponent) *ClassComponent {
+	if e == nil {
+		return nil
+	}
+
+	comp := &ClassComponent{
+		Name:        e.Name,
+		Type:        e.Type,
+		Visibility:  e.Visibility,
+		Constant:    e.Constant,
+		Level:       e.Level,
+		ReadOnly:    e.ReadOnly,
+		IsStatic:    e.IsStatic,
+		IsFinal:     e.IsFinal,
+		IsAbstract:  e.IsAbstract,
+		Description: e.Description,
+	}
+
+	// Get href from first link if available
+	if len(e.Links) > 0 {
+		comp.Href = e.Links[0].Href
+	}
+
+	// Convert nested components recursively
+	for _, child := range e.Components {
+		childCopy := child
+		comp.Components = append(comp.Components, *convertXMLElement(&childCopy))
+	}
+
+	return comp
+}
+
 // --- Type Hierarchy ---
 
 // HierarchyNode represents a node in the type hierarchy.
