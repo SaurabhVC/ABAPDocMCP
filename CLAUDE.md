@@ -158,6 +158,40 @@ case "NewTool":
     return mcp.NewToolResultText(formatResult(result)), nil
 ```
 
+### AMDP Session Manager Pattern (Goroutine + Channels)
+
+For operations requiring persistent HTTP sessions (like AMDP debugging):
+
+```go
+// Session manager maintains HTTP session via goroutine
+type AMDPSessionManager struct {
+    cmdChannel  chan AMDPCommand  // Commands from handlers
+    httpClient  *http.Client      // Holds session cookies
+    // ...
+}
+
+// Handler sends command via channel
+func (s *Server) handleAMDPDebuggerStep(...) {
+    resp, err := s.amdpSession.SendCommand(adt.AMDPCmdStep, args)
+    // ...
+}
+
+// Background goroutine processes commands
+func (m *AMDPSessionManager) processCommands(ctx context.Context) {
+    for {
+        select {
+        case cmd := <-m.cmdChannel:
+            resp := m.handleCommand(ctx, cmd)
+            cmd.Response <- resp
+        case <-ctx.Done():
+            return
+        }
+    }
+}
+```
+
+See `pkg/adt/amdp_session.go` for full implementation.
+
 ## Testing
 
 ### Unit Tests (172 tests)
@@ -265,6 +299,10 @@ All research reports, analysis documents, and design specifications follow this 
 - **017:** AMDP Debugging & UI5/BSP Capabilities - Investigation of ADT endpoints
 - **018:** AMDP Debugger Testing - Test class, API verification, session lock findings
 - **019:** AMDP Session Architecture & Solutions - Root cause analysis, 3 proposed solutions
+- **021:** Project Status v2.11 - Comprehensive project status with Transport Management
+- **022:** Future Vision - Strategic roadmap for AI-native ABAP development
+- **023:** VSP for ABAP Developers - Introduction article for developers and DevOps
+- **024:** AMDP Goroutine+Channel Architecture - Session persistence via Go concurrency (✅ Implemented)
 
 #### Reference Documentation (Non-numbered)
 - `abap-adt-discovery-guide.md` - ADT API discovery process
@@ -318,9 +356,10 @@ When creating a new report:
 | **SQL Trace** | ✅ Complete (GetSQLTraceState, ListSQLTraces - ST05) |
 | **RAP OData E2E** | ✅ Complete (DDLS, SRVD, SRVB create + publish) |
 | **External Debugger** | ✅ Complete (Breakpoints, Debug Listener, Debuggee parsing) |
-| **AMDP Debugger** | ⚠️ Limited (API works, needs session persistence - see Report 019) |
+| **AMDP Debugger** | ✅ Complete (Goroutine+Channel session manager - Report 024) |
+| **Transport Mgmt** | ✅ Complete (5 tools with safety controls - v2.11.0) |
 | **UI5/BSP Mgmt** | ✅ Partial (Read ops work; Create needs alternate API) |
-| **Tool Groups** | ✅ Complete (--disabled-groups: 5/U, T, H, D) |
+| **Tool Groups** | ✅ Complete (--disabled-groups: 5/U, T, H, D, C) |
 
 ### DSL & Workflow Usage
 

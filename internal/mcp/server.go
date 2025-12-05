@@ -14,8 +14,10 @@ import (
 
 // Server wraps the MCP server with ADT client.
 type Server struct {
-	mcpServer *server.MCPServer
-	adtClient *adt.Client
+	mcpServer   *server.MCPServer
+	adtClient   *adt.Client
+	amdpSession *adt.AMDPSessionManager // Persistent AMDP debug session (goroutine + channels)
+	config      *Config                  // Server configuration for session manager creation
 }
 
 // Config holds MCP server configuration.
@@ -111,6 +113,7 @@ func NewServer(cfg *Config) *Server {
 	s := &Server{
 		mcpServer: mcpServer,
 		adtClient: adtClient,
+		config:    cfg,
 	}
 
 	// Register tools based on mode and disabled groups
@@ -1649,12 +1652,9 @@ func (s *Server) registerTools(mode string, disabledGroups string) {
 	// AMDPDebuggerStart
 	if shouldRegister("AMDPDebuggerStart") {
 		s.mcpServer.AddTool(mcp.NewTool("AMDPDebuggerStart",
-			mcp.WithDescription("Start an AMDP (HANA SQLScript) debug session. Use cascade_mode='FULL' to debug nested procedure calls."),
+			mcp.WithDescription("Start an AMDP (HANA SQLScript) debug session with persistent goroutine. Creates a background goroutine that maintains the HTTP session cookies. Use AMDPDebuggerStep/AMDPGetVariables to interact, AMDPDebuggerStop to terminate."),
 			mcp.WithString("user",
 				mcp.Description("User to debug (defaults to current user)"),
-			),
-			mcp.WithString("cascade_mode",
-				mcp.Description("Debug mode: 'NONE' (direct procedure only) or 'FULL' (all nested procedures, default)"),
 			),
 		), s.handleAMDPDebuggerStart)
 	}
@@ -1662,39 +1662,21 @@ func (s *Server) registerTools(mode string, disabledGroups string) {
 	// AMDPDebuggerResume
 	if shouldRegister("AMDPDebuggerResume") {
 		s.mcpServer.AddTool(mcp.NewTool("AMDPDebuggerResume",
-			mcp.WithDescription("Resume AMDP debug session and wait for events. Blocking long-poll that returns on breakpoint hit or execution end."),
-			mcp.WithString("main_id",
-				mcp.Required(),
-				mcp.Description("Main ID from AMDPDebuggerStart"),
-			),
-			mcp.WithNumber("timeout",
-				mcp.Description("Timeout in seconds (default: 60, max: 240)"),
-			),
+			mcp.WithDescription("Get current AMDP debug session status. In goroutine model, this returns the current state without blocking. The session manager goroutine handles events internally."),
 		), s.handleAMDPDebuggerResume)
 	}
 
 	// AMDPDebuggerStop
 	if shouldRegister("AMDPDebuggerStop") {
 		s.mcpServer.AddTool(mcp.NewTool("AMDPDebuggerStop",
-			mcp.WithDescription("Stop an AMDP debug session."),
-			mcp.WithString("main_id",
-				mcp.Required(),
-				mcp.Description("Main ID from AMDPDebuggerStart"),
-			),
-			mcp.WithBoolean("hard_stop",
-				mcp.Description("Terminate debuggee immediately (default: false)"),
-			),
+			mcp.WithDescription("Stop the AMDP debug session and terminate the background goroutine. Cleans up the HTTP session on SAP server."),
 		), s.handleAMDPDebuggerStop)
 	}
 
 	// AMDPDebuggerStep
 	if shouldRegister("AMDPDebuggerStep") {
 		s.mcpServer.AddTool(mcp.NewTool("AMDPDebuggerStep",
-			mcp.WithDescription("Perform a step operation in the AMDP debugger."),
-			mcp.WithString("main_id",
-				mcp.Required(),
-				mcp.Description("Main ID from AMDPDebuggerStart"),
-			),
+			mcp.WithDescription("Perform a step operation in the AMDP debugger. Communicates via channel to the session manager goroutine."),
 			mcp.WithString("step_type",
 				mcp.Required(),
 				mcp.Description("Step type: 'stepInto', 'stepOver', 'stepReturn', 'stepContinue'"),
@@ -1705,14 +1687,7 @@ func (s *Server) registerTools(mode string, disabledGroups string) {
 	// AMDPGetVariables
 	if shouldRegister("AMDPGetVariables") {
 		s.mcpServer.AddTool(mcp.NewTool("AMDPGetVariables",
-			mcp.WithDescription("Get variable values during AMDP debugging. Returns scalar, table, and array types."),
-			mcp.WithString("main_id",
-				mcp.Required(),
-				mcp.Description("Main ID from AMDPDebuggerStart"),
-			),
-			mcp.WithArray("variable_ids",
-				mcp.Description("Variable IDs to retrieve"),
-			),
+			mcp.WithDescription("Get variable values during AMDP debugging. Communicates via channel to the session manager goroutine. Returns scalar, table, and array types."),
 		), s.handleAMDPGetVariables)
 	}
 
@@ -4476,90 +4451,98 @@ func (s *Server) handleUI5DeleteApp(ctx context.Context, request mcp.CallToolReq
 
 func (s *Server) handleAMDPDebuggerStart(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	user, _ := request.Params.Arguments["user"].(string)
-	cascadeMode, _ := request.Params.Arguments["cascade_mode"].(string)
+	if user == "" {
+		user = s.config.Username
+	}
 
-	session, err := s.adtClient.AMDPDebuggerStart(ctx, user, cascadeMode)
-	if err != nil {
+	// Check if session already active
+	if s.amdpSession != nil && s.amdpSession.IsRunning() {
+		return newToolResultError("AMDP session already active. Use AMDPDebuggerStop first."), nil
+	}
+
+	// Create new session manager with persistent HTTP client (goroutine + channels)
+	s.amdpSession = adt.NewAMDPSessionManager(
+		s.config.BaseURL,
+		s.config.Client,
+		s.config.InsecureSkipVerify,
+	)
+
+	// Start the session (creates goroutine that maintains HTTP session)
+	objectURI := "" // AMDP sessions don't require object URI at start
+	if err := s.amdpSession.Start(ctx, objectURI, s.config.Username, s.config.Password); err != nil {
+		s.amdpSession = nil
 		return newToolResultError(fmt.Sprintf("AMDPDebuggerStart failed: %v", err)), nil
 	}
 
+	state := s.amdpSession.State()
+
 	var sb strings.Builder
-	sb.WriteString("AMDP Debug Session Started\n\n")
-	sb.WriteString(fmt.Sprintf("Main ID: %s\n", session.MainID))
-	sb.WriteString(fmt.Sprintf("User: %s\n", session.User))
-	sb.WriteString(fmt.Sprintf("Cascade Mode: %s\n", session.CascadeMode))
-	sb.WriteString("\nUse AMDPDebuggerResume with the main_id to wait for breakpoints.")
+	sb.WriteString("AMDP Debug Session Started (Goroutine Active)\n\n")
+	sb.WriteString(fmt.Sprintf("Session ID: %s\n", state.SessionID))
+	sb.WriteString(fmt.Sprintf("Main ID: %s\n", state.MainID))
+	sb.WriteString(fmt.Sprintf("Status: %s\n", state.Status))
+	sb.WriteString("\nSession is maintained via background goroutine with channel communication.")
+	sb.WriteString("\nUse AMDPDebuggerStep, AMDPGetVariables to interact.")
+	sb.WriteString("\nUse AMDPDebuggerStop to terminate the session.")
 
 	return mcp.NewToolResultText(sb.String()), nil
 }
 
 func (s *Server) handleAMDPDebuggerResume(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	mainID, ok := request.Params.Arguments["main_id"].(string)
-	if !ok || mainID == "" {
-		return newToolResultError("main_id is required"), nil
+	// In the goroutine+channel model, Resume checks the current session status
+	// The session manager goroutine handles the event loop internally
+	if s.amdpSession == nil || !s.amdpSession.IsRunning() {
+		return newToolResultError("No active AMDP session. Use AMDPDebuggerStart first."), nil
 	}
 
-	timeout := 60
-	if t, ok := request.Params.Arguments["timeout"].(float64); ok {
-		timeout = int(t)
-	}
-
-	resp, err := s.adtClient.AMDPDebuggerResume(ctx, mainID, timeout)
+	// Get current status via channel
+	resp, err := s.amdpSession.SendCommand(adt.AMDPCmdGetStatus, nil)
 	if err != nil {
 		return newToolResultError(fmt.Sprintf("AMDPDebuggerResume failed: %v", err)), nil
 	}
 
+	state, ok := resp.Data.(*adt.AMDPSessionState)
+	if !ok {
+		return newToolResultError("Invalid response from session manager"), nil
+	}
+
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Event: %s\n\n", resp.Kind))
-
-	if resp.Position != nil {
-		sb.WriteString(fmt.Sprintf("Position: %s line %d\n", resp.Position.ObjectName, resp.Position.Line))
+	sb.WriteString("AMDP Session Status\n\n")
+	sb.WriteString(fmt.Sprintf("Session ID: %s\n", state.SessionID))
+	sb.WriteString(fmt.Sprintf("Main ID: %s\n", state.MainID))
+	sb.WriteString(fmt.Sprintf("Status: %s\n", state.Status))
+	if state.CurrentProc != "" {
+		sb.WriteString(fmt.Sprintf("Current Procedure: %s\n", state.CurrentProc))
 	}
-
-	if len(resp.CallStack) > 0 {
-		sb.WriteString("\nCall Stack:\n")
-		for _, frame := range resp.CallStack {
-			sb.WriteString(fmt.Sprintf("  [%d] %s at %s:%d\n", frame.Level, frame.Name, frame.Position.ObjectName, frame.Position.Line))
-		}
-	}
-
-	if len(resp.Variables) > 0 {
-		sb.WriteString("\nVariables:\n")
-		for _, v := range resp.Variables {
-			sb.WriteString(fmt.Sprintf("  %s (%s): %s\n", v.Name, v.Type, v.Value))
-		}
-	}
-
-	if resp.Message != "" {
-		sb.WriteString(fmt.Sprintf("\nMessage: %s\n", resp.Message))
+	if state.CurrentLine > 0 {
+		sb.WriteString(fmt.Sprintf("Current Line: %d\n", state.CurrentLine))
 	}
 
 	return mcp.NewToolResultText(sb.String()), nil
 }
 
 func (s *Server) handleAMDPDebuggerStop(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	mainID, ok := request.Params.Arguments["main_id"].(string)
-	if !ok || mainID == "" {
-		return newToolResultError("main_id is required"), nil
+	// In goroutine+channel model, we stop via the session manager
+	if s.amdpSession == nil {
+		return mcp.NewToolResultText("No AMDP session active."), nil
 	}
 
-	hardStop := false
-	if hs, ok := request.Params.Arguments["hard_stop"].(bool); ok {
-		hardStop = hs
-	}
-
-	err := s.adtClient.AMDPDebuggerStop(ctx, mainID, hardStop)
+	// Send stop command via channel (triggers goroutine cleanup)
+	_, err := s.amdpSession.SendCommand(adt.AMDPCmdStop, nil)
 	if err != nil {
-		return newToolResultError(fmt.Sprintf("AMDPDebuggerStop failed: %v", err)), nil
+		// Try force stop anyway
+		s.amdpSession.Stop()
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf("Successfully stopped AMDP debug session %s", mainID)), nil
+	s.amdpSession = nil
+
+	return mcp.NewToolResultText("AMDP debug session stopped. Goroutine terminated."), nil
 }
 
 func (s *Server) handleAMDPDebuggerStep(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	mainID, ok := request.Params.Arguments["main_id"].(string)
-	if !ok || mainID == "" {
-		return newToolResultError("main_id is required"), nil
+	// In goroutine+channel model, step via session manager
+	if s.amdpSession == nil || !s.amdpSession.IsRunning() {
+		return newToolResultError("No active AMDP session. Use AMDPDebuggerStart first."), nil
 	}
 
 	stepType, ok := request.Params.Arguments["step_type"].(string)
@@ -4567,22 +4550,25 @@ func (s *Server) handleAMDPDebuggerStep(ctx context.Context, request mcp.CallToo
 		return newToolResultError("step_type is required"), nil
 	}
 
-	resp, err := s.adtClient.AMDPDebuggerStep(ctx, mainID, stepType)
+	// Send step command via channel
+	resp, err := s.amdpSession.SendCommand(adt.AMDPCmdStep, map[string]interface{}{
+		"step_type": stepType,
+	})
 	if err != nil {
 		return newToolResultError(fmt.Sprintf("AMDPDebuggerStep failed: %v", err)), nil
 	}
 
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Step Result: %s\n\n", resp.Kind))
-
-	if resp.Position != nil {
-		sb.WriteString(fmt.Sprintf("Position: %s line %d\n", resp.Position.ObjectName, resp.Position.Line))
+	if resp.Error != nil {
+		return newToolResultError(fmt.Sprintf("Step failed: %v", resp.Error)), nil
 	}
 
-	if len(resp.CallStack) > 0 {
-		sb.WriteString("\nCall Stack:\n")
-		for _, frame := range resp.CallStack {
-			sb.WriteString(fmt.Sprintf("  [%d] %s at %s:%d\n", frame.Level, frame.Name, frame.Position.ObjectName, frame.Position.Line))
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Step executed: %s\n\n", stepType))
+
+	// Format response data
+	if data, ok := resp.Data.(map[string]interface{}); ok {
+		if response, ok := data["response"].(string); ok {
+			sb.WriteString(fmt.Sprintf("Response:\n%s\n", response))
 		}
 	}
 
@@ -4590,37 +4576,31 @@ func (s *Server) handleAMDPDebuggerStep(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleAMDPGetVariables(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	mainID, ok := request.Params.Arguments["main_id"].(string)
-	if !ok || mainID == "" {
-		return newToolResultError("main_id is required"), nil
+	// In goroutine+channel model, get variables via session manager
+	if s.amdpSession == nil || !s.amdpSession.IsRunning() {
+		return newToolResultError("No active AMDP session. Use AMDPDebuggerStart first."), nil
 	}
 
-	var variableIDs []string
-	if ids, ok := request.Params.Arguments["variable_ids"].([]interface{}); ok {
-		for _, id := range ids {
-			if s, ok := id.(string); ok {
-				variableIDs = append(variableIDs, s)
-			}
-		}
-	}
-
-	vars, err := s.adtClient.AMDPGetScalarValues(ctx, mainID, variableIDs)
+	// Send get variables command via channel
+	resp, err := s.amdpSession.SendCommand(adt.AMDPCmdGetVariables, nil)
 	if err != nil {
 		return newToolResultError(fmt.Sprintf("AMDPGetVariables failed: %v", err)), nil
+	}
+
+	if resp.Error != nil {
+		return newToolResultError(fmt.Sprintf("Get variables failed: %v", resp.Error)), nil
 	}
 
 	var sb strings.Builder
 	sb.WriteString("AMDP Variables:\n\n")
 
-	for _, v := range vars {
-		sb.WriteString(fmt.Sprintf("%s (%s)", v.Name, v.Type))
-		if v.Value != "" {
-			sb.WriteString(fmt.Sprintf(" = %s", v.Value))
+	// Format response data
+	if vars, ok := resp.Data.([]map[string]interface{}); ok {
+		for _, v := range vars {
+			if response, ok := v["response"].(string); ok {
+				sb.WriteString(response)
+			}
 		}
-		if v.Rows > 0 {
-			sb.WriteString(fmt.Sprintf(" [%d rows]", v.Rows))
-		}
-		sb.WriteString("\n")
 	}
 
 	return mcp.NewToolResultText(sb.String()), nil
