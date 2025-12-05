@@ -4,7 +4,7 @@ This file provides context for AI assistants (Claude, etc.) working on this proj
 
 ## Project Overview
 
-**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 31 essential tools (focused mode, default) or 68 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
+**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 41 essential tools (focused mode, default) or 68 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
 
 ## Quick Reference
 
@@ -183,6 +183,32 @@ The SAP ADT REST API documentation can be found at:
 5. **Auth conflicts**: Use only one auth method (basic OR cookies, not both)
 6. **Cookie auth with .env**: Pass `--cookie-file` to override .env credentials
 
+## SAP Object Naming Conventions
+
+When creating ABAP objects for testing and experiments, follow these conventions:
+
+### Package Structure
+- **Root package**: `$ZADT` (ADT experiments and testing)
+- **Subpackages**: `$ZADT_00`, `$ZADT_01`, etc. for different purposes/features
+- Example: `$ZADT_00` for debugger experiments, `$ZADT_01` for CDS experiments
+
+### Object Naming
+| Object Type | Pattern | Example |
+|-------------|---------|---------|
+| Programs | `ZADT_<nn>_<name>` | `ZADT_00_DEBUG_TEST` |
+| Classes | `ZCL_ADT_<name>` | `ZCL_ADT_DEBUG_HELPER` |
+| Interfaces | `ZIF_ADT_<name>` | `ZIF_ADT_DEBUGGABLE` |
+| Function Groups | `ZADT_<nn>_<name>` | `ZADT_00_UTILS` |
+
+### Debugging via Unit Tests
+To trigger breakpoints programmatically (without SAP GUI):
+1. Create a class with test methods (`lcl_test` pattern)
+2. Set external breakpoint on the test code
+3. Run `RunUnitTests` to trigger the breakpoint
+4. Use `DebuggerListen` → `DebuggerAttach` to catch and debug
+
+This allows AI-driven debugging without manual SAP GUI interaction.
+
 ## Security Notes
 
 - Never commit `.env`, `cookies.txt`, or `.mcp.json` (all in `.gitignore`)
@@ -267,7 +293,7 @@ When creating a new report:
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 68 (31 focused, 68 expert) |
+| **Tools** | 68 (41 focused, 68 expert) |
 | **Unit Tests** | 270 |
 | **Integration Tests** | 34 |
 | **Platforms** | 9 |

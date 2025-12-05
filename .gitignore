@@ -9,6 +9,7 @@ mcp-abap-adt/
 
 # MCP config (contains credentials)
 .mcp.json
+.mcp*.json
 ./claude/abap-adt-api-lib/
 
 # Binaries
@@ -48,3 +49,4 @@ Thumbs.db
 
 # Session summaries (may contain credentials)
 *SESSION-SUMMARY*
+abap-adt-api/

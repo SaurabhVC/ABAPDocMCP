@@ -556,7 +556,7 @@ func (c *Client) DebuggerListen(ctx context.Context, opts *ListenOptions) (*List
 
 	resp, err := c.transport.Request(listenCtx, "/sap/bc/adt/debugger/listeners", &RequestOptions{
 		Method: http.MethodPost,
-		Accept: "application/xml",
+		Accept: "application/vnd.sap.as+xml",
 		Query:  query,
 	})
 	if err != nil {

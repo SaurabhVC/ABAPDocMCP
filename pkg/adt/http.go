@@ -227,13 +227,15 @@ func (t *Transport) retryRequest(ctx context.Context, path string, opts *Request
 }
 
 // fetchCSRFToken retrieves a CSRF token from the server.
+// Uses /core/discovery with HEAD for optimal performance (~25ms vs ~56s for GET on /discovery)
 func (t *Transport) fetchCSRFToken(ctx context.Context) error {
-	reqURL, err := t.buildURL("/sap/bc/adt/discovery", nil)
+	reqURL, err := t.buildURL("/sap/bc/adt/core/discovery", nil)
 	if err != nil {
 		return fmt.Errorf("building URL: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	// Use HEAD instead of GET for faster CSRF token fetch (~5s vs ~56s on slow systems)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
@@ -262,13 +264,8 @@ func (t *Transport) fetchCSRFToken(ctx context.Context) error {
 	// Drain body to allow connection reuse
 	_, _ = io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
-		return &APIError{
-			StatusCode: resp.StatusCode,
-			Message:    "failed to fetch CSRF token",
-			Path:       "/sap/bc/adt/discovery",
-		}
-	}
+	// Note: HEAD may return 400 but still provides CSRF token in headers
+	// We extract the token regardless of status code
 
 	token := resp.Header.Get("X-CSRF-Token")
 	if token == "" || token == "Required" {

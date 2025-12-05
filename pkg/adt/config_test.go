@@ -27,7 +27,7 @@ func TestNewConfig(t *testing.T) {
 				Client:      "001",
 				Language:    "EN",
 				SessionType: SessionStateful,
-				Timeout:     30 * time.Second,
+				Timeout:     60 * time.Second,
 			},
 		},
 		{
@@ -43,7 +43,7 @@ func TestNewConfig(t *testing.T) {
 				Client:      "100",
 				Language:    "EN",
 				SessionType: SessionStateful,
-				Timeout:     30 * time.Second,
+				Timeout:     60 * time.Second,
 			},
 		},
 		{
@@ -59,7 +59,7 @@ func TestNewConfig(t *testing.T) {
 				Client:      "001",
 				Language:    "DE",
 				SessionType: SessionStateful,
-				Timeout:     30 * time.Second,
+				Timeout:     60 * time.Second,
 			},
 		},
 		{
@@ -76,7 +76,7 @@ func TestNewConfig(t *testing.T) {
 				Language:           "EN",
 				InsecureSkipVerify: true,
 				SessionType:        SessionStateful,
-				Timeout:            30 * time.Second,
+				Timeout:            60 * time.Second,
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func TestNewConfig(t *testing.T) {
 				Client:      "001",
 				Language:    "EN",
 				SessionType: SessionStateless,
-				Timeout:     30 * time.Second,
+				Timeout:     60 * time.Second,
 			},
 		},
 		{

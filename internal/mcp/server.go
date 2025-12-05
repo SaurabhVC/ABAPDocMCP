@@ -112,10 +112,10 @@ func (s *Server) ServeStdio() error {
 }
 
 // registerTools registers ADT tools with the MCP server based on mode.
-// Mode "focused" registers 17 essential tools (67% reduction).
-// Mode "expert" registers all 45 tools.
+// Mode "focused" registers 41 essential tools.
+// Mode "expert" registers all 68 tools.
 func (s *Server) registerTools(mode string) {
-	// Define focused mode tool whitelist (17 essential tools)
+	// Define focused mode tool whitelist (41 essential tools)
 	focusedTools := map[string]bool{
 		// Unified tools (2)
 		"GetSource":   true,
@@ -141,10 +141,11 @@ func (s *Server) registerTools(mode string) {
 		"FindDefinition":  true,
 		"FindReferences":  true,
 
-		// Development tools (3)
+		// Development tools (4)
 		"SyntaxCheck":   true,
 		"RunUnitTests":  true,
 		"RunATCCheck":   true, // Code quality checks
+		"Activate":      true, // Re-activate objects without editing
 
 		// Advanced/Edge cases (2)
 		"LockObject":   true,

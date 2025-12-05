@@ -332,7 +332,7 @@ func TestSetExternalBreakpoint_Integration(t *testing.T) {
 	// Mock SAP response for successful breakpoint creation
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CSRF token request via discovery endpoint
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -385,7 +385,7 @@ func TestSetExternalBreakpoint_Integration(t *testing.T) {
 func TestGetExternalBreakpoints_Integration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CSRF token request via discovery endpoint
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -422,7 +422,7 @@ func TestDeleteExternalBreakpoint_Integration(t *testing.T) {
 	deleteCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CSRF token request via discovery endpoint
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -454,7 +454,7 @@ func TestDeleteExternalBreakpoint_Integration(t *testing.T) {
 func TestValidateBreakpointCondition(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CSRF token request via discovery endpoint
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -1020,7 +1020,7 @@ func TestParseDebuggeeResponse_Empty(t *testing.T) {
 
 func TestDebuggerAttach_Mock(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -1063,7 +1063,7 @@ func TestDebuggerAttach_Mock(t *testing.T) {
 func TestDebuggerStep_Mock(t *testing.T) {
 	var lastMethod string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -1121,7 +1121,7 @@ func TestDebuggerStep_Mock(t *testing.T) {
 
 func TestDebuggerGetStack_Mock(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -1163,7 +1163,7 @@ func TestDebuggerGetStack_Mock(t *testing.T) {
 
 func TestDebuggerGetVariables_Mock(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == "/sap/bc/adt/core/discovery" {
 			w.Header().Set("X-CSRF-Token", "test-token")
 			w.WriteHeader(http.StatusOK)
 			return
