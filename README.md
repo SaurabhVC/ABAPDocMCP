@@ -1,3 +1,9 @@
+# Vibing Steampunk (vsp)
+
+**AI-Agentic Development Unlocked for ABAP** — ECC, S/4HANA, BTP, everywhere.
+
+> MCP server that gives Claude (and other AI assistants) full access to SAP ADT APIs.
+> Read code, write code, debug, deploy, run tests — all through natural language.
 
 ![Vibing ABAP Developer](./media/vibing-steampunk.png)
 
@@ -40,10 +46,6 @@
 - Full RAP development lifecycle via MCP tools
 
 ---
-
-# vsp
-
-A Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT).
 
 **Single binary** with **41 focused tools** (default) or **68 expert tools** for AI-assisted ABAP development.
 
