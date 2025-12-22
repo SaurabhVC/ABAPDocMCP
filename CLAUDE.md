@@ -380,7 +380,7 @@ When creating a new report:
 | **ABAP Profiler** | ✅ Complete (ListTraces, GetTrace - ATRA) |
 | **SQL Trace** | ✅ Complete (GetSQLTraceState, ListSQLTraces - ST05) |
 | **RAP OData E2E** | ✅ Complete (DDLS, SRVD, SRVB create + publish) |
-| **External Debugger** | ⚠️ Limited (Listener + attach works; breakpoints via WebSocket ZADT_VSP only) |
+| **External Debugger** | ⚠️ HTTP unreliable → Use WebSocket ZADT_VSP (stateful APC) |
 | **AMDP Debugger** | ⚠️ Experimental (Session works, breakpoints need investigation - expert mode only) |
 | **Transport Mgmt** | ✅ Complete (5 tools with safety controls - v2.11.0) |
 | **UI5/BSP Mgmt** | ✅ Partial (Read ops work; Create needs alternate API) |
