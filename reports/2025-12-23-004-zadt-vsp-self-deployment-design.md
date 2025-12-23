@@ -400,6 +400,65 @@ Updates existing objects to latest version.
 
 ---
 
+## Dependency Embedding Architecture (Implemented)
+
+### Hybrid Approach
+
+We use a hybrid approach for embedding:
+
+1. **Our code (ZADT_VSP):** Raw ABAP strings via `go:embed` - self-contained, no dependencies
+2. **Dependencies (abapGit):** abapGit ZIP format - standard container, unzip + deploy via WriteSource
+
+### Directory Structure
+
+```
+embedded/
+├── abap/                         # OUR CODE (raw ABAP)
+│   ├── zif_vsp_service.intf.abap
+│   ├── zcl_vsp_*.clas.abap
+│   └── embed.go                  # go:embed as strings
+│
+└── deps/                         # DEPENDENCIES (abapGit ZIP)
+    ├── abapgit-standalone.zip    # Full abapGit (placeholder)
+    ├── abapgit-dev.zip           # Developer edition (placeholder)
+    └── embed.go                  # Unzip + deploy logic
+```
+
+### deps/embed.go Features
+
+- **`ParseAbapGitFilename()`** - Extracts object type, name, include type from abapGit filenames
+- **`UnzipInMemory()`** - Extracts all files from ZIP without touching disk
+- **`DeploymentOrder()`** - Sorts files by dependency (INTF → CLAS → PROG → etc.)
+- **`CreateDeploymentPlan()`** - Groups files by object, extracts descriptions from XML
+
+### abapGit File Parsing
+
+| Filename | ObjectType | ObjectName | IncludeType |
+|----------|------------|------------|-------------|
+| `zcl_example.clas.abap` | CLAS | ZCL_EXAMPLE | (main) |
+| `zcl_example.clas.locals_def.abap` | CLAS | ZCL_EXAMPLE | locals_def |
+| `zcl_example.clas.locals_imp.abap` | CLAS | ZCL_EXAMPLE | locals_imp |
+| `zcl_example.clas.testclasses.abap` | CLAS | ZCL_EXAMPLE | testclasses |
+| `zif_example.intf.abap` | INTF | ZIF_EXAMPLE | (main) |
+| `zexample.ddls.asddls` | DDLS | ZEXAMPLE | (main) |
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `InstallZADTVSP` | Deploy ZADT_VSP from embedded raw ABAP |
+| `InstallAbapGit` | Deploy abapGit from embedded ZIP |
+| `ListDependencies` | Show available dependencies |
+
+### Benefits
+
+1. **Bootstrap capability** - VSP can install its own dependencies
+2. **Self-contained** - Single binary contains everything
+3. **Standard format** - abapGit ZIP is widely used
+4. **No target dependencies** - WriteSource works on any ADT system
+
+---
+
 ## Conclusion
 
 The `InstallZADTVSP` tool will:

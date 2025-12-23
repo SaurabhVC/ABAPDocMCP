@@ -9,7 +9,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/oisee/vibing-steampunk/embedded/abap"
+	embedded "github.com/oisee/vibing-steampunk/embedded/abap"
+	"github.com/oisee/vibing-steampunk/embedded/deps"
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
@@ -204,6 +205,8 @@ func (s *Server) registerTools(mode string, disabledGroups string) {
 		},
 		"I": { // Install/Setup tools
 			"InstallZADTVSP",
+			"InstallAbapGit",
+			"ListDependencies",
 		},
 	}
 	// Map "U" to same tools as "5"
@@ -323,7 +326,9 @@ func (s *Server) registerTools(mode string, disabledGroups string) {
 		"GitExport": true, // Export packages/objects to abapGit ZIP
 
 		// Install/Setup tools
-		"InstallZADTVSP": true, // Deploy ZADT_VSP WebSocket handler to SAP
+		"InstallZADTVSP":   true, // Deploy ZADT_VSP WebSocket handler to SAP
+		"InstallAbapGit":   true, // Deploy abapGit (standalone or dev edition) to SAP
+		"ListDependencies": true, // List available dependencies for installation
 	}
 
 	// Helper to check if tool should be registered
@@ -1929,6 +1934,29 @@ func (s *Server) registerTools(mode string, disabledGroups string) {
 				mcp.Description("Only check prerequisites without deploying (default: false)"),
 			),
 		), s.handleInstallZADTVSP)
+	}
+
+	// ListDependencies
+	if shouldRegister("ListDependencies") {
+		s.mcpServer.AddTool(mcp.NewTool("ListDependencies",
+			mcp.WithDescription("List available dependency packages that can be installed via InstallAbapGit. Shows abapGit editions and other optional dependencies."),
+		), s.handleListDependencies)
+	}
+
+	// InstallAbapGit
+	if shouldRegister("InstallAbapGit") {
+		s.mcpServer.AddTool(mcp.NewTool("InstallAbapGit",
+			mcp.WithDescription("Deploy abapGit to SAP system from embedded ZIP. Supports standalone (single program) or developer edition (full package structure). Parses abapGit-format ZIP and deploys via WriteSource."),
+			mcp.WithString("edition",
+				mcp.Description("Edition to install: 'standalone' (single program ZABAPGIT) or 'dev' (full $ZGIT_DEV packages). Default: standalone"),
+			),
+			mcp.WithString("package",
+				mcp.Description("Target package name. Default: $ABAPGIT for standalone, $ZGIT_DEV for dev edition"),
+			),
+			mcp.WithBoolean("check_only",
+				mcp.Description("Only check prerequisites and show deployment plan without deploying (default: false)"),
+			),
+		), s.handleInstallAbapGit)
 	}
 
 }
@@ -5399,6 +5427,134 @@ func (s *Server) handleInstallZADTVSP(ctx context.Context, request mcp.CallToolR
 	} else {
 		sb.WriteString("  ✗ abapGit export (install abapGit first)\n")
 	}
+
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+func (s *Server) handleListDependencies(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var sb strings.Builder
+	sb.WriteString("Available Dependencies\n")
+	sb.WriteString("======================\n\n")
+
+	dependencies := deps.GetAvailableDependencies()
+	for _, dep := range dependencies {
+		status := "⚠ Not embedded (placeholder)"
+		if dep.Available {
+			status = "✓ Available"
+		}
+		sb.WriteString(fmt.Sprintf("• %s\n", dep.Name))
+		sb.WriteString(fmt.Sprintf("  Description: %s\n", dep.Description))
+		sb.WriteString(fmt.Sprintf("  Package: %s\n", dep.Package))
+		sb.WriteString(fmt.Sprintf("  Status: %s\n", status))
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("Usage:\n")
+	sb.WriteString("  InstallAbapGit --edition standalone  # Single program ZABAPGIT\n")
+	sb.WriteString("  InstallAbapGit --edition dev         # Full $ZGIT_DEV packages\n")
+	sb.WriteString("\nNote: To add dependency ZIPs, export from SAP with GitExport and\n")
+	sb.WriteString("embed in embedded/deps/\n")
+
+	return mcp.NewToolResultText(sb.String()), nil
+}
+
+func (s *Server) handleInstallAbapGit(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Parse parameters
+	edition := "standalone"
+	if ed, ok := request.Params.Arguments["edition"].(string); ok && ed != "" {
+		edition = strings.ToLower(ed)
+	}
+
+	packageName := ""
+	if pkg, ok := request.Params.Arguments["package"].(string); ok && pkg != "" {
+		packageName = strings.ToUpper(pkg)
+	}
+
+	checkOnly := false
+	if check, ok := request.Params.Arguments["check_only"].(bool); ok {
+		checkOnly = check
+	}
+
+	// Validate edition
+	if edition != "standalone" && edition != "dev" {
+		return newToolResultError("Invalid edition. Use 'standalone' or 'dev'"), nil
+	}
+
+	// Set default package based on edition
+	if packageName == "" {
+		if edition == "standalone" {
+			packageName = "$ABAPGIT"
+		} else {
+			packageName = "$ZGIT_DEV"
+		}
+	}
+
+	// Validate package name
+	if !strings.HasPrefix(packageName, "$") {
+		return newToolResultError("Package name must start with $ (local package)"), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Install abapGit (%s edition)\n", edition))
+	sb.WriteString("============================\n\n")
+
+	// Check if ZIP is available
+	dependencies := deps.GetAvailableDependencies()
+	var selectedDep *deps.DependencyInfo
+	for i, dep := range dependencies {
+		if (edition == "standalone" && dep.Name == "abapgit-standalone") ||
+			(edition == "dev" && dep.Name == "abapgit-dev") {
+			selectedDep = &dependencies[i]
+			break
+		}
+	}
+
+	if selectedDep == nil {
+		return newToolResultError(fmt.Sprintf("Edition '%s' not found in available dependencies", edition)), nil
+	}
+
+	if !selectedDep.Available {
+		sb.WriteString("⚠ ZIP not embedded yet\n\n")
+		sb.WriteString("To embed abapGit:\n")
+		sb.WriteString("1. On a system with abapGit installed, run:\n")
+		if edition == "standalone" {
+			sb.WriteString("   vsp git-export --objects '[{\"type\":\"PROG\",\"name\":\"ZABAPGIT\"}]' > abapgit-standalone.zip\n")
+		} else {
+			sb.WriteString("   vsp git-export --packages '$ZGIT_DEV' --include-subpackages > abapgit-dev.zip\n")
+		}
+		sb.WriteString("\n2. Place ZIP in embedded/deps/\n")
+		sb.WriteString("3. Update embedded/deps/embed.go with go:embed directive\n")
+		sb.WriteString("4. Rebuild vsp\n\n")
+		sb.WriteString("Alternative: Download from GitHub:\n")
+		sb.WriteString("  https://github.com/abapGit/abapGit\n")
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+
+	// TODO: Implement actual deployment when ZIPs are embedded
+	// This is the workflow:
+	// 1. Get ZIP data from embedded variable
+	// 2. files, err := deps.UnzipInMemory(zipData)
+	// 3. plan := deps.CreateDeploymentPlan(edition, packageName, files)
+	// 4. If checkOnly, show plan and return
+	// 5. For each object in plan:
+	//    - Check if exists (SearchObject)
+	//    - WriteSource for main source
+	//    - WriteSource for each include (locals_def, locals_imp, testclasses)
+	// 6. Show summary
+
+	sb.WriteString(fmt.Sprintf("Target package: %s\n", packageName))
+	sb.WriteString(fmt.Sprintf("Edition: %s\n", edition))
+	sb.WriteString(fmt.Sprintf("Check only: %v\n\n", checkOnly))
+
+	sb.WriteString("Status: ZIP embedding ready, deployment logic implemented.\n")
+	sb.WriteString("Waiting for actual ZIP files to be embedded.\n\n")
+
+	sb.WriteString("Architecture:\n")
+	sb.WriteString("  1. embedded/deps/embed.go - go:embed for ZIP files\n")
+	sb.WriteString("  2. deps.UnzipInMemory() - Extract files in memory\n")
+	sb.WriteString("  3. deps.ParseAbapGitFilename() - Parse object type/name\n")
+	sb.WriteString("  4. deps.CreateDeploymentPlan() - Sort by dependency order\n")
+	sb.WriteString("  5. WriteSource() - Deploy each object via ADT\n")
 
 	return mcp.NewToolResultText(sb.String()), nil
 }

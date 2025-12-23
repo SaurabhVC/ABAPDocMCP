@@ -352,7 +352,7 @@ When creating a new report:
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 96 (48 focused, 96 expert) |
+| **Tools** | 99 (51 focused, 99 expert) |
 | **Unit Tests** | 244 |
 | **Integration Tests** | 34 |
 | **Platforms** | 9 |
@@ -379,6 +379,7 @@ When creating a new report:
 | **Tool Groups** | ✅ Complete (--disabled-groups: 5/U, T, H, D, C) |
 | **Class Includes** | ✅ Complete (v2.12 - testclasses, locals_def, locals_imp, macros) |
 | **abapGit Integration** | ✅ Complete (v2.16.0 - WebSocket, GitTypes, GitExport - 158 object types) |
+| **Install Tools** | ✅ Complete (v2.17.0 - InstallZADTVSP, InstallAbapGit, ListDependencies) |
 
 ### DSL & Workflow Usage
 

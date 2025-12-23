@@ -310,12 +310,50 @@ src/
 
 ---
 
+## Install/Setup Tools (3 tools) - NEW v2.17.0
+
+Deploy VSP components and dependencies to SAP systems via ADT.
+
+| Tool | Description | Mode |
+|------|-------------|------|
+| `InstallZADTVSP` | Deploy ZADT_VSP WebSocket handler (6 ABAP objects) | Focused |
+| `InstallAbapGit` | Deploy abapGit from embedded ZIP (standalone or dev edition) | Focused |
+| `ListDependencies` | List available dependencies for installation | Focused |
+
+**InstallZADTVSP Parameters:**
+- `package` - Target package name (default: `$ZADT_VSP`)
+- `skip_git_service` - Skip Git service if no abapGit (default: auto-detected)
+- `check_only` - Only check prerequisites, don't deploy
+
+**InstallAbapGit Parameters:**
+- `edition` - `standalone` (single program) or `dev` (full packages)
+- `package` - Target package (default: `$ABAPGIT` or `$ZGIT_DEV`)
+- `check_only` - Only show deployment plan
+
+**Architecture:**
+```
+embedded/
+├── abap/           # ZADT_VSP source (raw ABAP, go:embed)
+│   ├── zif_vsp_service.intf.abap
+│   ├── zcl_vsp_*.clas.abap
+│   └── embed.go
+│
+└── deps/           # Dependencies (abapGit ZIP format)
+    ├── abapgit-standalone.zip  # Placeholder
+    ├── abapgit-dev.zip         # Placeholder
+    └── embed.go                # Unzip + deploy logic
+```
+
+**Tool Group:** Install tools can be disabled with `--disabled-groups I`
+
+---
+
 ## Tool Count Summary
 
 | Mode | Tools | Description |
 |------|-------|-------------|
-| **Focused** | 48 | Essential tools for AI-assisted development |
-| **Expert** | 96 | All tools including low-level operations and RAP creation |
+| **Focused** | 51 | Essential tools for AI-assisted development |
+| **Expert** | 99 | All tools including low-level operations and RAP creation |
 
 **Token Savings with Focused Mode:**
 - Tool definitions: 50% reduction (~5,000 → ~2,500 tokens)
