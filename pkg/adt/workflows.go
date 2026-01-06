@@ -452,6 +452,7 @@ func (c *Client) CreateFromFile(ctx context.Context, filePath, packageName, tran
 	err = c.CreateObject(ctx, CreateObjectOptions{
 		ObjectType:  info.ObjectType,
 		Name:        info.ObjectName,
+		ParentName:  info.ParentName, // For function modules: function group name
 		Description: info.Description,
 		PackageName: packageName,
 		Transport:   transport,
@@ -468,7 +469,7 @@ func (c *Client) CreateFromFile(ctx context.Context, filePath, packageName, tran
 	}
 
 	// 4. Build object URL
-	objectURL, err := c.buildObjectURL(info.ObjectType, info.ObjectName)
+	objectURL, err := c.buildObjectURLWithParent(info.ObjectType, info.ObjectName, info.ParentName)
 	if err != nil {
 		return nil, err
 	}
@@ -792,9 +793,15 @@ func (c *Client) DeployFromFile(ctx context.Context, filePath, packageName, tran
 		info.ClassIncludeType != "" &&
 		info.ClassIncludeType != ClassIncludeMain
 
+	// Check if this is a function module (requires parent function group)
+	isFunctionModule := info.ObjectType == ObjectTypeFunctionMod
+
 	// 2. Check if object exists
-	objectURL, err := c.buildObjectURL(info.ObjectType, info.ObjectName)
+	objectURL, err := c.buildObjectURLWithParent(info.ObjectType, info.ObjectName, info.ParentName)
 	if err != nil {
+		if isFunctionModule && info.ParentName == "" {
+			return nil, fmt.Errorf("function module file must follow pattern: {fugr_name}.fugr.{func_name}.func.abap")
+		}
 		return nil, err
 	}
 
@@ -833,6 +840,11 @@ func (c *Client) DeployFromFile(ctx context.Context, filePath, packageName, tran
 
 // buildObjectURL constructs the ADT URL for an object type and name
 func (c *Client) buildObjectURL(objType CreatableObjectType, name string) (string, error) {
+	return c.buildObjectURLWithParent(objType, name, "")
+}
+
+// buildObjectURLWithParent constructs the ADT URL for an object type with optional parent
+func (c *Client) buildObjectURLWithParent(objType CreatableObjectType, name, parentName string) (string, error) {
 	name = strings.ToLower(name)
 	// URL encode to handle namespaced objects like /DMO/...
 	encodedName := url.PathEscape(name)
@@ -845,6 +857,13 @@ func (c *Client) buildObjectURL(objType CreatableObjectType, name string) (strin
 		return fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s", encodedName), nil
 	case ObjectTypeFunctionGroup:
 		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s", encodedName), nil
+	case ObjectTypeFunctionMod:
+		if parentName == "" {
+			return "", fmt.Errorf("function module requires parent function group name")
+		}
+		parentName = strings.ToLower(parentName)
+		encodedParent := url.PathEscape(parentName)
+		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s/fmodules/%s", encodedParent, encodedName), nil
 	case ObjectTypeInclude:
 		return fmt.Sprintf("/sap/bc/adt/programs/includes/%s", encodedName), nil
 	// RAP object types

@@ -14,11 +14,29 @@ type ABAPFileInfo struct {
 	FilePath          string
 	ObjectType        CreatableObjectType
 	ObjectName        string
+	ParentName        string           // For function modules: the function group name
 	Description       string           // Parsed from comments if available
 	ClassIncludeType  ClassIncludeType // For class includes (testclasses, definitions, etc.)
 	HasDefinition     bool             // For classes
 	HasImplementation bool
 	HasTestClasses    bool
+}
+
+// extractFunctionGroupFromFilename extracts the function group name from abapGit-style filenames.
+// Pattern: {fugr_name}.fugr.{func_name}.func.abap → FUGR_NAME
+// Example: zvsp_report.fugr.z_vsp_run_report.func.abap → ZVSP_REPORT
+func extractFunctionGroupFromFilename(filePath string) string {
+	baseName := filepath.Base(filePath)
+	// Pattern: {fugr}.fugr.{func}.func.abap
+	if strings.HasSuffix(strings.ToLower(baseName), ".func.abap") {
+		// Find .fugr. in the filename
+		lowerName := strings.ToLower(baseName)
+		fugrIdx := strings.Index(lowerName, ".fugr.")
+		if fugrIdx > 0 {
+			return strings.ToUpper(baseName[:fugrIdx])
+		}
+	}
+	return ""
 }
 
 // extractClassNameFromFilename extracts the parent class name from abapGit-style filenames.
@@ -92,6 +110,7 @@ func ParseABAPFile(filePath string) (*ABAPFileInfo, error) {
 		info.ObjectType = ObjectTypeFunctionGroup
 	case strings.HasSuffix(baseName, ".func.abap"):
 		info.ObjectType = ObjectTypeFunctionMod
+		info.ParentName = extractFunctionGroupFromFilename(filePath)
 	// RAP object types (ABAPGit-compatible extensions)
 	case strings.HasSuffix(baseName, ".ddls.asddls"):
 		info.ObjectType = ObjectTypeDDLS

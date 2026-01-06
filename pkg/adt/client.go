@@ -773,9 +773,12 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 		return ""
 	}
 
-	// Get client info from T000
+	// Get client info from T000 - this is the primary query, propagate errors
 	clientResult, err := c.RunQuery(ctx, "SELECT MANDT, MTEXT, LOGSYS FROM T000 WHERE MANDT = '"+c.config.Client+"'", 1)
-	if err == nil && len(clientResult.Rows) > 0 {
+	if err != nil {
+		return nil, fmt.Errorf("getting system info: %w", err)
+	}
+	if len(clientResult.Rows) > 0 {
 		row := clientResult.Rows[0]
 		info.Client = getString(row, "MANDT")
 		// LOGSYS format is typically <SID>CLNT<client>, e.g., A4HCLNT001
@@ -784,7 +787,7 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 		}
 	}
 
-	// Get SAP_BASIS version from CVERS
+	// Get SAP_BASIS version from CVERS (optional - don't fail if unavailable)
 	basisResult, err := c.RunQuery(ctx, "SELECT RELEASE, EXTRELEASE FROM CVERS WHERE COMPONENT = 'SAP_BASIS'", 1)
 	if err == nil && len(basisResult.Rows) > 0 {
 		row := basisResult.Rows[0]
@@ -792,20 +795,20 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 		info.ABAPRelease = getString(row, "RELEASE")
 	}
 
-	// Try to get kernel info from CVERS
+	// Try to get kernel info from CVERS (optional)
 	kernelResult, err := c.RunQuery(ctx, "SELECT RELEASE FROM CVERS WHERE COMPONENT = 'SAP_ABA'", 1)
 	if err == nil && len(kernelResult.Rows) > 0 {
 		info.KernelRelease = getString(kernelResult.Rows[0], "RELEASE")
 	}
 
-	// Try to detect HANA from CVERS
+	// Try to detect HANA from CVERS (optional)
 	hanaResult, err := c.RunQuery(ctx, "SELECT RELEASE FROM CVERS WHERE COMPONENT LIKE '%HDB%' OR COMPONENT LIKE '%HANA%'", 1)
 	if err == nil && len(hanaResult.Rows) > 0 {
 		info.DatabaseSystem = "HDB"
 		info.DatabaseRelease = getString(hanaResult.Rows[0], "RELEASE")
 	}
 
-	// If we couldn't get SystemID from T000, try from config
+	// If we couldn't get SystemID from T000, use fallback
 	if info.SystemID == "" {
 		info.SystemID = "???"
 	}
