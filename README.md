@@ -157,14 +157,85 @@ git clone https://github.com/oisee/vibing-steampunk.git && cd vibing-steampunk
 make build
 ```
 
+## CLI Mode
+
+vsp works in two modes:
+1. **MCP Server Mode** (default) - Exposes tools via Model Context Protocol for Claude
+2. **CLI Mode** - Direct command-line operations without MCP
+
+### CLI Commands
+
+```bash
+# Search for ABAP objects
+vsp -s a4h search "ZCL_*"
+vsp -s dev search "Z*ORDER*" --type CLAS --max 50
+
+# Get source code
+vsp -s a4h source CLAS ZCL_MY_CLASS
+vsp -s dev source PROG ZTEST_PROGRAM
+
+# Export packages to ZIP (abapGit format)
+vsp -s a4h export '$ZORK' '$ZLLM' -o packages.zip
+vsp -s dev export '$TMP' --subpackages
+
+# List configured systems
+vsp systems
+
+# Configuration management
+vsp config init          # Create example configs
+vsp config show          # Show effective configuration
+vsp config mcp-to-vsp    # Import from .mcp.json to .vsp.json
+vsp config vsp-to-mcp    # Export from .vsp.json to .mcp.json
+```
+
+### System Profiles (`.vsp.json`)
+
+Configure multiple SAP systems in `.vsp.json`:
+
+```json
+{
+  "default": "dev",
+  "systems": {
+    "dev": {
+      "url": "http://dev.example.com:50000",
+      "user": "DEVELOPER",
+      "client": "001"
+    },
+    "a4h": {
+      "url": "http://a4h.local:50000",
+      "user": "ADMIN",
+      "client": "001",
+      "insecure": true
+    },
+    "prod": {
+      "url": "https://prod.example.com:44300",
+      "user": "READONLY",
+      "client": "100",
+      "read_only": true,
+      "cookie_file": "/path/to/cookies.txt"
+    }
+  }
+}
+```
+
+**Password Resolution:**
+- Set via environment variable: `VSP_<SYSTEM>_PASSWORD` (e.g., `VSP_DEV_PASSWORD`)
+- Or use cookie authentication: `cookie_file` or `cookie_string`
+
+**Config Locations** (searched in order):
+1. `.vsp.json` (current directory)
+2. `.vsp/systems.json`
+3. `~/.vsp.json`
+4. `~/.vsp/systems.json`
+
 <details>
-<summary><strong>Configuration Options</strong></summary>
+<summary><strong>MCP Server Configuration</strong></summary>
 
 ### CLI Flags
 ```bash
 vsp --url https://host:44300 --user admin --password secret
 vsp --url https://host:44300 --cookie-file cookies.txt
-vsp --mode expert  # Enable all 62 tools
+vsp --mode expert  # Enable all 99 tools
 ```
 
 ### Environment Variables
