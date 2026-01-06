@@ -281,11 +281,19 @@ func (t *Transport) fetchCSRFToken(ctx context.Context) error {
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	// Note: HEAD may return 400 but still provides CSRF token in headers
-	// We extract the token regardless of status code
+	// But 401/403 indicates auth failure and won't have a valid token
 
 	token := resp.Header.Get("X-CSRF-Token")
 	if token == "" || token == "Required" {
-		return fmt.Errorf("no CSRF token in response")
+		// Provide better error message based on status code
+		switch resp.StatusCode {
+		case http.StatusUnauthorized:
+			return fmt.Errorf("authentication failed (401): check username/password")
+		case http.StatusForbidden:
+			return fmt.Errorf("access forbidden (403): check user authorizations")
+		default:
+			return fmt.Errorf("no CSRF token in response (HTTP %d)", resp.StatusCode)
+		}
 	}
 
 	t.setCSRFToken(token)
