@@ -2,6 +2,7 @@ package adt
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -111,9 +112,12 @@ func (c *AMDPWebSocketClient) Connect(ctx context.Context) error {
 
 	wsURL := fmt.Sprintf("%s://%s/sap/bc/apc/sap/zadt_vsp?sap-client=%s", scheme, u.Host, c.client)
 
-	// Create dialer with auth
+	// Create dialer with auth and TLS config
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 30 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: c.insecure,
+		},
 	}
 
 	// Add basic auth header
