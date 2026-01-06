@@ -18,6 +18,10 @@ type SystemConfig struct {
 	Language string `json:"language,omitempty"`
 	Insecure bool   `json:"insecure,omitempty"`
 
+	// Cookie authentication (alternative to user/password)
+	CookieFile   string `json:"cookie_file,omitempty"`   // Path to Netscape-format cookie file
+	CookieString string `json:"cookie_string,omitempty"` // Inline cookie string
+
 	// Optional safety settings per system
 	ReadOnly        bool     `json:"read_only,omitempty"`
 	AllowedPackages []string `json:"allowed_packages,omitempty"`

@@ -31,12 +31,14 @@ func init() {
 
 // systemParams holds resolved system parameters.
 type systemParams struct {
-	URL      string
-	User     string
-	Password string
-	Client   string
-	Language string
-	Insecure bool
+	URL          string
+	User         string
+	Password     string
+	Client       string
+	Language     string
+	Insecure     bool
+	CookieFile   string
+	CookieString string
 }
 
 // resolveSystemParams resolves system parameters from --system flag or env vars.
@@ -56,8 +58,10 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 			return nil, err
 		}
 
-		if sys.Password == "" {
-			return nil, fmt.Errorf("password not found for system '%s'. Set VSP_%s_PASSWORD env var", systemName, strings.ToUpper(systemName))
+		// Require either password or cookie auth
+		hasCookieAuth := sys.CookieFile != "" || sys.CookieString != ""
+		if sys.Password == "" && !hasCookieAuth {
+			return nil, fmt.Errorf("auth not found for system '%s'. Set VSP_%s_PASSWORD env var or use cookie_file/cookie_string", systemName, strings.ToUpper(systemName))
 		}
 
 		verbose, _ := cmd.Flags().GetBool("verbose")
@@ -66,12 +70,14 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 		}
 
 		return &systemParams{
-			URL:      sys.URL,
-			User:     sys.User,
-			Password: sys.Password,
-			Client:   sys.Client,
-			Language: sys.Language,
-			Insecure: sys.Insecure,
+			URL:          sys.URL,
+			User:         sys.User,
+			Password:     sys.Password,
+			Client:       sys.Client,
+			Language:     sys.Language,
+			Insecure:     sys.Insecure,
+			CookieFile:   sys.CookieFile,
+			CookieString: sys.CookieString,
 		}, nil
 	}
 
@@ -98,7 +104,7 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 }
 
 // getClient creates an ADT client from system params.
-func getClient(params *systemParams) *adt.Client {
+func getClient(params *systemParams) (*adt.Client, error) {
 	opts := []adt.Option{
 		adt.WithClient(params.Client),
 		adt.WithLanguage(params.Language),
@@ -107,7 +113,22 @@ func getClient(params *systemParams) *adt.Client {
 		opts = append(opts, adt.WithInsecureSkipVerify())
 	}
 
-	return adt.NewClient(params.URL, params.User, params.Password, opts...)
+	// Use cookie auth if available
+	if params.CookieFile != "" {
+		cookies, err := adt.LoadCookiesFromFile(params.CookieFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load cookies from %s: %w", params.CookieFile, err)
+		}
+		opts = append(opts, adt.WithCookies(cookies))
+		return adt.NewClient(params.URL, "", "", opts...), nil
+	}
+	if params.CookieString != "" {
+		cookies := adt.ParseCookieString(params.CookieString)
+		opts = append(opts, adt.WithCookies(cookies))
+		return adt.NewClient(params.URL, "", "", opts...), nil
+	}
+
+	return adt.NewClient(params.URL, params.User, params.Password, opts...), nil
 }
 
 // getWSClient creates an AMDP WebSocket client for GitExport.
@@ -212,7 +233,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	client := getClient(params)
+	client, err := getClient(params)
+	if err != nil {
+		return err
+	}
 	query := args[0]
 	ctx := context.Background()
 
@@ -262,7 +286,10 @@ func runSource(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	client := getClient(params)
+	client, err := getClient(params)
+	if err != nil {
+		return err
+	}
 	objType := strings.ToUpper(args[0])
 	name := strings.ToUpper(args[1])
 
@@ -315,15 +342,29 @@ func runSystems(cmd *cobra.Command, args []string) error {
 		if name == cfg.Default {
 			defaultMark = " (default)"
 		}
-		pwdStatus := "env"
-		if sys.Password != "" {
-			pwdStatus = "inline"
-		} else if os.Getenv(fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))) != "" {
-			pwdStatus = "env ✓"
+
+		// Determine auth method
+		authStatus := ""
+		if sys.CookieFile != "" {
+			authStatus = fmt.Sprintf("cookie-file:%s", sys.CookieFile)
+		} else if sys.CookieString != "" {
+			authStatus = "cookie-string:***"
 		} else {
-			pwdStatus = "env ✗"
+			// Password auth
+			if sys.Password != "" {
+				authStatus = "pwd:inline"
+			} else if os.Getenv(fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))) != "" {
+				authStatus = "pwd:env ✓"
+			} else {
+				authStatus = "pwd:env ✗"
+			}
 		}
-		fmt.Printf("  %-12s %s [%s@%s] pwd:%s%s\n", name, sys.URL, sys.User, sys.Client, pwdStatus, defaultMark)
+
+		userInfo := sys.User
+		if userInfo == "" {
+			userInfo = "(cookie)"
+		}
+		fmt.Printf("  %-12s %s [%s@%s] %s%s\n", name, sys.URL, userInfo, sys.Client, authStatus, defaultMark)
 	}
 
 	return nil

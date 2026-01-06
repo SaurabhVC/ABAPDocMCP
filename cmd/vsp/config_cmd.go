@@ -324,6 +324,10 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 				sys.Client = val
 			case "--language":
 				sys.Language = val
+			case "--cookie-file":
+				sys.CookieFile = val
+			case "--cookie-string":
+				sys.CookieString = val
 			case "--insecure":
 				sys.Insecure = true
 				continue // insecure is a flag, not key-value
@@ -411,9 +415,19 @@ func runVspToMcp(cmd *cobra.Command, args []string) error {
 
 		serverArgs := []string{
 			"--url", sys.URL,
-			"--user", sys.User,
-			"--client", sys.Client,
 		}
+
+		// Cookie auth or user/password auth
+		if sys.CookieFile != "" {
+			serverArgs = append(serverArgs, "--cookie-file", sys.CookieFile)
+		} else if sys.CookieString != "" {
+			serverArgs = append(serverArgs, "--cookie-string", sys.CookieString)
+		} else if sys.User != "" {
+			serverArgs = append(serverArgs, "--user", sys.User)
+		}
+
+		serverArgs = append(serverArgs, "--client", sys.Client)
+
 		if sys.Insecure {
 			serverArgs = append(serverArgs, "--insecure")
 		}
@@ -424,12 +438,18 @@ func runVspToMcp(cmd *cobra.Command, args []string) error {
 			serverArgs = append(serverArgs, "--allowed-packages", strings.Join(sys.AllowedPackages, ","))
 		}
 
+		// Build env block - only add password placeholder if using user auth
+		envBlock := make(map[string]string)
+		if sys.CookieFile == "" && sys.CookieString == "" {
+			envBlock["SAP_PASSWORD"] = "YOUR_PASSWORD_HERE"
+		}
+
 		server := map[string]interface{}{
 			"command": execPath,
 			"args":    serverArgs,
-			"env": map[string]string{
-				"SAP_PASSWORD": "YOUR_PASSWORD_HERE",
-			},
+		}
+		if len(envBlock) > 0 {
+			server["env"] = envBlock
 		}
 
 		action := "ADD"
