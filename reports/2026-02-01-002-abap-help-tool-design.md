@@ -258,10 +258,10 @@ Documentation from SAP system:
 ## Status
 
 - [x] Level 1: URL helper (pkg/adt/help.go) ✅ 2026-02-01
+- [x] Level 2: ABAP method in ZADT_VSP ✅ 2026-02-01
+- [x] Level 3: Go WebSocket client integration ✅ 2026-02-01
 - [x] Level 4: MCP tool registration ✅ 2026-02-01
 - [x] Tests (15 unit tests) ✅ 2026-02-01
-- [ ] Level 2: ABAP method in ZADT_VSP (future)
-- [ ] Level 3: Go WebSocket client integration (future)
 - [ ] Documentation
 
 ---

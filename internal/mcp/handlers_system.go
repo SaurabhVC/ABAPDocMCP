@@ -87,6 +87,14 @@ func (s *Server) handleGetAbapHelp(ctx context.Context, request mcp.CallToolRequ
 		return newToolResultError(fmt.Sprintf("GetAbapHelp failed: %v", err)), nil
 	}
 
+	// Try to get real documentation from SAP system via WebSocket (ZADT_VSP)
+	if s.debugWSClient != nil && s.debugWSClient.IsConnected() {
+		wsHelp, err := s.debugWSClient.GetAbapDocumentation(ctx, keyword)
+		if err == nil && wsHelp.Found && wsHelp.HTML != "" {
+			helpResult.Documentation = wsHelp.HTML
+		}
+	}
+
 	// Format output for LLM consumption
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "ABAP Keyword: %s\n\n", helpResult.Keyword)
