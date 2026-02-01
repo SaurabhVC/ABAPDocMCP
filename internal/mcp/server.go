@@ -667,6 +667,16 @@ func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig m
 		mcp.WithDescription("Probe SAP system for available features. Returns status of optional capabilities like abapGit, RAP/OData, AMDP debugging, UI5/BSP, and CTS transports. Use this to understand what features are available before attempting to use them."),
 	), s.handleGetFeatures)
 
+	// GetAbapHelp - ABAP Keyword Documentation
+	// Always registered - provides URL and search query, optionally real docs via ZADT_VSP
+	s.mcpServer.AddTool(mcp.NewTool("GetAbapHelp",
+		mcp.WithDescription("Get ABAP keyword documentation. Returns URL to SAP Help Portal and search query. If ZADT_VSP is installed, also returns real documentation from SAP system."),
+		mcp.WithString("keyword",
+			mcp.Required(),
+			mcp.Description("ABAP keyword (e.g., SELECT, LOOP, DATA, METHOD, READ TABLE)"),
+		),
+	), s.handleGetAbapHelp)
+
 	// --- Code Analysis Infrastructure (CAI) ---
 
 	// GetCallGraph
