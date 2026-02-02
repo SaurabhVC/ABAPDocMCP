@@ -11,6 +11,12 @@
 
 ## What's New
 
+**v2.23.0** - GitExport to Disk & GetAbapHelp via WebSocket
+- **GitExport saves ZIP to disk**: No more base64 - files written directly to `output_dir`
+- **GetAbapHelp via WebSocket**: Real SAP documentation from system (uses ZADT_VSP if connected)
+- **Lazy WebSocket Connection**: WebSocket connects on-demand for Git/Help operations
+- **Embedded ABAP Sync**: Updated all ZADT_VSP classes from SAP system (2026-02-02)
+
 **v2.22.0** - SAP GUI Debugger Integration
 - **SAP_TERMINAL_ID**: Share breakpoints between vsp and SAP GUI sessions
 - **MoveObject Tool**: Move ABAP objects between packages (via ZADT_VSP WebSocket)
