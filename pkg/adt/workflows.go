@@ -1048,7 +1048,9 @@ func (c *Client) SaveToFile(ctx context.Context, objType CreatableObjectType, ob
 	if !strings.HasSuffix(outputPath, ext) {
 		// outputPath is a directory
 		objectName = strings.ToLower(objectName)
-		result.FilePath = filepath.Join(outputPath, objectName+ext)
+		// Replace namespace slashes with # for filesystem compatibility (abapGit convention)
+		safeFileName := strings.ReplaceAll(objectName, "/", "#")
+		result.FilePath = filepath.Join(outputPath, safeFileName+ext)
 	} else {
 		result.FilePath = outputPath
 	}
@@ -1123,7 +1125,9 @@ func (c *Client) SaveClassIncludeToFile(ctx context.Context, className string, i
 	if !strings.HasSuffix(outputPath, ext) {
 		// outputPath is a directory
 		className = strings.ToLower(className)
-		result.FilePath = filepath.Join(outputPath, className+ext)
+		// Replace namespace slashes with # for filesystem compatibility (abapGit convention)
+		safeFileName := strings.ReplaceAll(className, "/", "#")
+		result.FilePath = filepath.Join(outputPath, safeFileName+ext)
 	} else {
 		result.FilePath = outputPath
 	}
@@ -1293,6 +1297,11 @@ func (c *Client) EditSourceWithOptions(ctx context.Context, objectURL, oldString
 	// Default options
 	if opts == nil {
 		opts = &EditSourceOptions{SyntaxCheck: true}
+	}
+
+	// Check if transportable edits are allowed when transport is specified
+	if err := c.checkTransportableEdit(opts.Transport, "EditSource"); err != nil {
+		return nil, err
 	}
 	// SyntaxCheck defaults to true if not explicitly set (zero value is false, so we need to handle this)
 	// Note: caller should explicitly set SyntaxCheck=false if they don't want it
@@ -2083,6 +2092,11 @@ func (c *Client) WriteSource(ctx context.Context, objectType, name, source strin
 	}
 	if opts.Mode == "" {
 		opts.Mode = WriteModeUpsert
+	}
+
+	// Check if transportable edits are allowed when transport is specified
+	if err := c.checkTransportableEdit(opts.Transport, "WriteSource"); err != nil {
+		return nil, err
 	}
 
 	objectType = strings.ToUpper(objectType)

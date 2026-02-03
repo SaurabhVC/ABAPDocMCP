@@ -11,6 +11,15 @@
 
 ## What's New
 
+**v2.24.0** - Transportable Edits Safety Feature
+- **Safety by Default**: Editing objects in transportable packages blocked unless explicitly enabled
+- **`--allow-transportable-edits`**: Opt-in flag to enable editing non-local objects
+- **Transport Whitelisting**: `--allowed-transports "A4HK*,DEVK*"` restricts allowed TRs
+- **Package Whitelisting**: `--allowed-packages "Z*,$TMP"` restricts editable packages
+- **Clear Error Messages**: Explains why edits are blocked and how to enable
+- **Transport Tool Visibility**: `ListTransports`/`GetTransport` visible when flag enabled
+- See [Transportable Edits Report](reports/2026-02-03-002-transportable-edits-safety-feature.md)
+
 **v2.23.0** - GitExport to Disk & GetAbapHelp via WebSocket
 - **GitExport saves ZIP to disk**: No more base64 - files written directly to `output_dir`
 - **GetAbapHelp via WebSocket**: Real SAP documentation from system (uses ZADT_VSP if connected)
@@ -128,9 +137,10 @@
 
 **v2.11.0** - Transport Management & Safety Controls
 - **5 Transport Tools**: ListTransports, GetTransport, CreateTransport, ReleaseTransport, DeleteTransport
-- **Safety Controls**: `--enable-transports`, `--transport-read-only`, `--allowed-transports "A4HK*"`
+- **Safety Controls**: `--enable-transports`, `--allowed-transports "A4HK*"`, `--allowed-packages "Z*"`
 - **Tool Group "C"**: Disable all CTS tools with `--disabled-groups C`
 - Enterprise-grade transport governance for AI assistants
+- See also v2.24.0 for `--allow-transportable-edits` safety feature
 
 **v2.10.0** - UI5/BSP Management & Tool Groups
 - **7 UI5/BSP Tools**: List apps, read files, search content, view manifests
@@ -294,6 +304,9 @@ SAP_PASSWORD=secret
 | `--cookie-file` | `SAP_COOKIE_FILE` | Netscape cookie file |
 | `--insecure` | `SAP_INSECURE` | Skip TLS verification |
 | `--terminal-id` | `SAP_TERMINAL_ID` | SAP GUI terminal ID for cross-tool debugging |
+| `--allow-transportable-edits` | `SAP_ALLOW_TRANSPORTABLE_EDITS` | Enable editing transportable objects |
+| `--allowed-transports` | `SAP_ALLOWED_TRANSPORTS` | Whitelist transports (wildcards: `A4HK*`) |
+| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | Whitelist packages (wildcards: `Z*,$TMP`) |
 
 </details>
 

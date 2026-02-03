@@ -79,6 +79,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&cfg.EnableTransports, "enable-transports", false, "Enable transport management operations (disabled by default for safety)")
 	rootCmd.Flags().BoolVar(&cfg.TransportReadOnly, "transport-read-only", false, "Only allow read operations on transports (list, get)")
 	rootCmd.Flags().StringSliceVar(&cfg.AllowedTransports, "allowed-transports", nil, "Restrict transport operations to specific transports (comma-separated, supports wildcards like A4HK*)")
+	rootCmd.Flags().BoolVar(&cfg.AllowTransportableEdits, "allow-transportable-edits", false, "Allow editing objects in transportable packages (requires transport parameter)")
 
 	// Mode options
 	rootCmd.Flags().StringVar(&cfg.Mode, "mode", "focused", "Tool mode: focused (19 essential tools) or expert (all 45 tools)")
@@ -116,6 +117,7 @@ func init() {
 	viper.BindPFlag("enable-transports", rootCmd.Flags().Lookup("enable-transports"))
 	viper.BindPFlag("transport-read-only", rootCmd.Flags().Lookup("transport-read-only"))
 	viper.BindPFlag("allowed-transports", rootCmd.Flags().Lookup("allowed-transports"))
+	viper.BindPFlag("allow-transportable-edits", rootCmd.Flags().Lookup("allow-transportable-edits"))
 	viper.BindPFlag("mode", rootCmd.Flags().Lookup("mode"))
 	viper.BindPFlag("disabled-groups", rootCmd.Flags().Lookup("disabled-groups"))
 	viper.BindPFlag("verbose", rootCmd.Flags().Lookup("verbose"))
@@ -189,6 +191,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 		if cfg.EnableTransports {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Transport management ENABLED\n")
+		}
+		if cfg.AllowTransportableEdits {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: Transportable edits ENABLED (can modify non-local objects)\n")
 		}
 		if !cfg.ReadOnly && !cfg.BlockFreeSQL && cfg.AllowedOps == "" && cfg.DisallowedOps == "" && len(cfg.AllowedPackages) == 0 {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: UNRESTRICTED (no safety checks active)\n")
@@ -317,6 +322,9 @@ func resolveConfig(cmd *cobra.Command) {
 		if transports := viper.GetStringSlice("ALLOWED_TRANSPORTS"); len(transports) > 0 {
 			cfg.AllowedTransports = transports
 		}
+	}
+	if !cmd.Flags().Changed("allow-transportable-edits") {
+		cfg.AllowTransportableEdits = viper.GetBool("ALLOW_TRANSPORTABLE_EDITS")
 	}
 
 	// Feature configuration: flag > SAP_FEATURE_* env

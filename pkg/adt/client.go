@@ -43,6 +43,11 @@ func (c *Client) checkPackageSafety(pkg string) error {
 	return c.config.Safety.CheckPackage(pkg)
 }
 
+// checkTransportableEdit checks if editing objects that require transports is allowed.
+func (c *Client) checkTransportableEdit(transport, opName string) error {
+	return c.config.Safety.CheckTransportableEdit(transport, opName)
+}
+
 // Safety returns the safety configuration for checking transport operations.
 func (c *Client) Safety() *SafetyConfig {
 	return &c.config.Safety
