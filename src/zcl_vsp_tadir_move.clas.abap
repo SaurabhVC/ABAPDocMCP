@@ -1,4 +1,4 @@
-CLASS zadt_cl_tadir_move DEFINITION
+CLASS zcl_vsp_tadir_move DEFINITION
   PUBLIC
   FINAL
   CREATE PUBLIC.
@@ -32,7 +32,11 @@ CLASS zadt_cl_tadir_move DEFINITION
 
 ENDCLASS.
 
-CLASS zadt_cl_tadir_move IMPLEMENTATION.
+
+
+CLASS ZCL_VSP_TADIR_MOVE IMPLEMENTATION.
+
+
   METHOD move_object.
     DATA: ls_tadir     TYPE tadir,
           ls_new_tadir TYPE tadir.
@@ -101,6 +105,7 @@ CLASS zadt_cl_tadir_move IMPLEMENTATION.
       rv_msg = |ERROR sy-subrc={ sy-subrc } { sy-msgid }-{ sy-msgno }: { sy-msgv1 } { sy-msgv2 }|.
     ENDIF.
   ENDMETHOD.
+
 
   METHOD move_object_and_commit.
     rv_msg = move_object(

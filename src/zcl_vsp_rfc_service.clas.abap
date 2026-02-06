@@ -78,11 +78,14 @@ CLASS zcl_vsp_rfc_service DEFINITION
 ENDCLASS.
 
 
-CLASS zcl_vsp_rfc_service IMPLEMENTATION.
+
+CLASS ZCL_VSP_RFC_SERVICE IMPLEMENTATION.
+
 
   METHOD zif_vsp_service~get_domain.
     rv_domain = 'rfc'.
   ENDMETHOD.
+
 
   METHOD zif_vsp_service~handle_message.
     CASE is_message-action.
@@ -107,8 +110,10 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     ENDCASE.
   ENDMETHOD.
 
+
   METHOD zif_vsp_service~on_disconnect.
   ENDMETHOD.
+
 
   METHOD handle_move_to_package.
     " Extract parameters: pgmid, object, obj_name, new_package
@@ -165,6 +170,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
 
     rs_response = VALUE #( id = is_message-id success = abap_true data = lv_json ).
   ENDMETHOD.
+
 
   METHOD handle_call.
     DATA(lv_function) = extract_param( iv_params = is_message-params iv_name = 'function' ).
@@ -366,6 +372,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     rs_response = VALUE #( id = is_message-id success = abap_true data = lv_json ).
   ENDMETHOD.
 
+
   METHOD create_param_data.
     DATA lv_type TYPE string.
 
@@ -389,6 +396,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+
   METHOD create_table_data.
     DATA lv_type TYPE string.
 
@@ -406,6 +414,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
         CLEAR ro_data.
     ENDTRY.
   ENDMETHOD.
+
 
   METHOD handle_get_metadata.
     DATA(lv_function) = extract_param( iv_params = is_message-params iv_name = 'function' ).
@@ -475,6 +484,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     rs_response = VALUE #( id = is_message-id success = abap_true data = lv_json ).
   ENDMETHOD.
 
+
   METHOD get_func_interface.
     rv_success = abap_false.
     CLEAR: et_import, et_export, et_changing, et_tables.
@@ -520,6 +530,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     rv_success = abap_true.
   ENDMETHOD.
 
+
   METHOD handle_search.
     DATA lv_pattern TYPE string.
     lv_pattern = extract_param( iv_params = is_message-params iv_name = 'pattern' ).
@@ -550,11 +561,13 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     rs_response = VALUE #( id = is_message-id success = abap_true data = lv_json ).
   ENDMETHOD.
 
+
   METHOD handle_ping.
     DATA lv_ts TYPE string.
     lv_ts = sy-datum && sy-uzeit.
     rs_response = VALUE #( id = is_message-id success = abap_true data = '{"pong":true,"timestamp":"' && lv_ts && '"}' ).
   ENDMETHOD.
+
 
   METHOD extract_param.
     DATA lv_name TYPE string.
@@ -572,6 +585,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+
   METHOD escape_json.
     rv_escaped = iv_string.
     REPLACE ALL OCCURRENCES OF '\' IN rv_escaped WITH '\\'.
@@ -580,6 +594,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
     REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>newline IN rv_escaped WITH '\n'.
     REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN rv_escaped WITH '\t'.
   ENDMETHOD.
+
 
   METHOD build_error.
     DATA(lv_o) = '{'.
@@ -590,6 +605,7 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
       error   = |{ lv_o }"code":"{ iv_code }","message":"{ escape_json( iv_message ) }"{ lv_c }|
     ).
   ENDMETHOD.
+
 
   METHOD handle_run_report.
     " Run a report via async RFC - workaround for APC_ILLEGAL_STATEMENT with SUBMIT
@@ -655,5 +671,4 @@ CLASS zcl_vsp_rfc_service IMPLEMENTATION.
 
     rs_response = VALUE #( id = is_message-id success = abap_true data = lv_json ).
   ENDMETHOD.
-
 ENDCLASS.

@@ -5,8 +5,8 @@ ENDCLASS.
 
 CLASS lcl_test IMPLEMENTATION.
   METHOD test_calculate.
-    DATA lt_result TYPE zcl_adt_00_amdp_test=>tt_result.
-    zcl_adt_00_amdp_test=>calculate_squares(
+    DATA lt_result TYPE zcl_vsp_00_amdp_test=>tt_result.
+    zcl_vsp_00_amdp_test=>calculate_squares(
       EXPORTING iv_count = 5
       IMPORTING et_result = lt_result
     ).
