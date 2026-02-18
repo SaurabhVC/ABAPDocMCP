@@ -412,6 +412,9 @@ func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig m
 		"InstallAbapGit":   true, // Deploy abapGit (standalone or dev edition) to SAP
 		"ListDependencies": true, // List available dependencies for installation
 		"InstallDummyTest": true, // Test tool for verifying Install* workflow
+
+		// WRICEF Technical Specification
+		"GenerateWricefTechSpec": true, // Generate structured Markdown tech spec from TR numbers
 	}
 
 	// Helper to check if tool should be registered
@@ -2387,6 +2390,99 @@ func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig m
 		), s.handleInstallDummyTest)
 	}
 
+	// --- WRICEF Technical Specification ---
+
+	// GenerateWricefTechSpec
+	if shouldRegister("GenerateWricefTechSpec") {
+		s.mcpServer.AddTool(mcp.NewTool("GenerateWricefTechSpec",
+			mcp.WithDescription("Generate a WRICEF Technical Specification Markdown document from one or more SAP Transport Request numbers. Fetches transport objects and optionally their source code, then produces a structured spec with document info, transport contents, WRICEF-specific sections (Report / Interface / Enhancement / Form / Workflow / OData), pseudocode, DB objects, auth objects, error handling, test scenarios, and a Mermaid object-relationship diagram."),
+			mcp.WithString("transport_numbers",
+				mcp.Required(),
+				mcp.Description("Comma-separated transport request numbers (e.g. 'DEVK900123,DEVK900124')"),
+			),
+			mcp.WithString("wricef_type",
+				mcp.Description("WRICEF type: REPORT | INTERFACE | CONVERSION | ENHANCEMENT | FORM | WORKFLOW (default: REPORT)"),
+			),
+			mcp.WithString("wricef_id",
+				mcp.Description("WRICEF identifier, e.g. 'ZSD-R-001'"),
+			),
+			mcp.WithString("complexity",
+				mcp.Description("Complexity: S | M | L | XL"),
+			),
+			mcp.WithString("cr_number",
+				mcp.Description("Change request / ticket number, e.g. 'CHG0012345'"),
+			),
+			mcp.WithString("module",
+				mcp.Description("SAP functional module, e.g. 'SD', 'FI', 'MM'"),
+			),
+			mcp.WithString("developer_name",
+				mcp.Description("Developer full name"),
+			),
+			mcp.WithString("developer_user_id",
+				mcp.Description("Developer SAP user ID"),
+			),
+			mcp.WithString("reviewer_name",
+				mcp.Description("Reviewer full name"),
+			),
+			mcp.WithString("approver_name",
+				mcp.Description("Approver full name"),
+			),
+			mcp.WithString("system_id",
+				mcp.Description("SAP system ID (default: DEV)"),
+			),
+			mcp.WithString("client",
+				mcp.Description("SAP client number (default: 100)"),
+			),
+			mcp.WithString("version",
+				mcp.Description("Document version (default: 1.0)"),
+			),
+			mcp.WithBoolean("fetch_source_code",
+				mcp.Description("Fetch source code for code objects to enrich pseudocode, DB tables, FM calls, auth objects sections (default: true)"),
+			),
+			// Interface-specific
+			mcp.WithString("interface_direction",
+				mcp.Description("Interface direction: Inbound | Outbound | Bidirectional"),
+			),
+			mcp.WithString("interface_protocol",
+				mcp.Description("Interface protocol: RFC | IDoc | REST | SOAP | File"),
+			),
+			mcp.WithString("interface_frequency",
+				mcp.Description("Interface frequency: Real-time | Batch | Event-driven"),
+			),
+			// Enhancement-specific
+			mcp.WithString("enhancement_type",
+				mcp.Description("Enhancement type: BAdI | User Exit | Implicit Enhancement"),
+			),
+			mcp.WithString("enhancement_name",
+				mcp.Description("BAdI / enhancement exit name"),
+			),
+			mcp.WithString("original_program",
+				mcp.Description("Original program / object being enhanced"),
+			),
+			// Form-specific
+			mcp.WithString("form_technology",
+				mcp.Description("Form technology: SmartForms | Adobe Forms | SAPscript"),
+			),
+			mcp.WithString("form_output_type",
+				mcp.Description("Form output type: Spool | Email | PDF"),
+			),
+			// Workflow-specific
+			mcp.WithString("workflow_steps",
+				mcp.Description("Workflow steps description (newline-separated)"),
+			),
+			// OData / RAP-specific
+			mcp.WithString("service_binding",
+				mcp.Description("OData/RAP service binding name"),
+			),
+			mcp.WithString("service_definition",
+				mcp.Description("OData/RAP service definition name"),
+			),
+			mcp.WithString("notes",
+				mcp.Description("Additional notes for the tech spec"),
+			),
+		), s.handleGenerateWricefTechSpec)
+	}
+
 	// Register tool aliases for common operations
 	// These provide short names for frequently used tools
 	s.registerToolAliases(shouldRegister)
@@ -2487,3 +2583,4 @@ func (s *Server) requireActiveAMDPSession() *mcp.CallToolResult {
 // - handlers_report.go: RunReport, GetVariants, etc.
 // - handlers_install.go: InstallZADTVSP, InstallAbapGit, etc.
 // - handlers_transport.go: ListTransports, GetTransport, etc.
+// - handlers_techspec.go: GenerateWricefTechSpec
